@@ -140,3 +140,6 @@ CELERY_RESULT_BACKEND = "django-db"
 CELERY_BROKER_URL = os.getenv("CELERY_BROKER_URL", "memory://")
 
 RTSP_URL = os.getenv("RTSP_URL", "rtsp://localhost:8554/overwatch")
+
+MEDIA_URL = "/media/"
+MEDIA_ROOT = os.path.join(BASE_DIR, "media")
