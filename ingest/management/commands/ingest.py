@@ -7,6 +7,7 @@ from django.core.files.base import ContentFile
 from django.core.management.base import BaseCommand
 
 from ingest.models import Frame
+from ingest.tasks import generate_embeddings
 
 
 class Command(BaseCommand):
@@ -44,6 +45,7 @@ class Command(BaseCommand):
                             image=ContentFile(buffer.tobytes(), filename),
                             timestamp=timestamp,
                         )
+                        generate_embeddings.delay(frame_instance.id)
                         self.stdout.write(
                             self.style.SUCCESS(f"Saved frame: {frame_instance}")
                         )

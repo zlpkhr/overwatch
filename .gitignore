@@ -1,7 +1,7 @@
 .DS_Store
 __pycache__/
 /.venv/
-db.sqlite3
+db.sqlite3*
 footage.mp4
 /media/
 .env
