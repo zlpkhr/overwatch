@@ -1,0 +1,41 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Start mediamtx",
+      "type": "shell",
+      "command": "mediamtx mediamtx.yaml",
+      "problemMatcher": [],
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": false,
+        "panel": "shared",
+        "showReuseMessage": false,
+        "clear": true,
+        "group": "stream"
+      }
+    },
+    {
+      "label": "Stream footage",
+      "type": "shell",
+      "command": "ffmpeg -re -stream_loop -1 -i footage.mp4 -c:v libx264 -preset veryfast -tune zerolatency -g 30 -keyint_min 30 -b:v 2.5M -f rtsp rtsp://localhost:8554/overwatch",
+      "problemMatcher": [],
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": false,
+        "panel": "shared",
+        "showReuseMessage": false,
+        "clear": true,
+        "group": "stream"
+      }
+    },
+    {
+      "label": "Run stream",
+      "dependsOn": ["Start mediamtx", "Stream footage"],
+      "dependsOrder": "parallel",
+      "problemMatcher": []
+    }
+  ]
+}

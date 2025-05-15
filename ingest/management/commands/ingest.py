@@ -20,24 +20,20 @@ class Command(BaseCommand):
             self.stdout.write(self.style.ERROR("Failed to open RTSP stream."))
             return
 
-        fps = cap.get(cv2.CAP_PROP_FPS)
-        if not fps or fps <= 0:
-            fps = 24
-        frame_interval = int(fps)
-
-        frame_count = 0
+        last_saved = time.time()
         self.stdout.write(
             self.style.NOTICE("Extracting frames at 1 FPS. Press Ctrl+C to stop.")
         )
         try:
             while cap.isOpened():
                 ret, frame = cap.read()
-                if not ret:
+                if not ret or frame is None or frame.size == 0:
                     self.stdout.write(
-                        self.style.WARNING("Stream ended or cannot fetch frame.")
+                        self.style.WARNING("Empty or invalid frame, exiting...")
                     )
                     break
-                if frame_count % frame_interval == 0:
+                now = time.time()
+                if now - last_saved >= 1.0:
                     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
                     filename = f"frames/frame_{timestamp}.jpg"
                     success, buffer = cv2.imencode(".jpg", frame)
@@ -46,10 +42,9 @@ class Command(BaseCommand):
                         self.stdout.write(
                             self.style.SUCCESS(f"Saved frame: {filename}")
                         )
-                        time.sleep(1)
                     else:
                         self.stdout.write(self.style.WARNING("Failed to encode frame."))
-                frame_count += 1
+                    last_saved = now
         except KeyboardInterrupt:
             self.stdout.write(self.style.WARNING("Interrupted by user."))
         finally:
