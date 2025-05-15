@@ -1,10 +1,11 @@
-from django.core.management.base import BaseCommand
-import cv2
-from datetime import datetime
-from django.conf import settings
-from django.core.files.storage import default_storage
-from django.core.files.base import ContentFile
 import time
+from datetime import datetime
+
+import cv2
+from django.conf import settings
+from django.core.files.base import ContentFile
+from django.core.files.storage import default_storage
+from django.core.management.base import BaseCommand
 
 
 class Command(BaseCommand):
