@@ -4,8 +4,9 @@ from datetime import datetime
 import cv2
 from django.conf import settings
 from django.core.files.base import ContentFile
-from django.core.files.storage import default_storage
 from django.core.management.base import BaseCommand
+
+from ingest.models import Frame
 
 
 class Command(BaseCommand):
@@ -35,13 +36,16 @@ class Command(BaseCommand):
                     break
                 now = time.time()
                 if now - last_saved >= 1.0:
-                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
-                    filename = f"frames/frame_{timestamp}.jpg"
+                    timestamp = datetime.now()
+                    filename = f"{timestamp.isoformat(sep='_', timespec='seconds')}.jpg"
                     success, buffer = cv2.imencode(".jpg", frame)
                     if success:
-                        default_storage.save(filename, ContentFile(buffer.tobytes()))
+                        frame_instance = Frame.objects.create(
+                            image=ContentFile(buffer.tobytes(), filename),
+                            timestamp=timestamp,
+                        )
                         self.stdout.write(
-                            self.style.SUCCESS(f"Saved frame: {filename}")
+                            self.style.SUCCESS(f"Saved frame: {frame_instance}")
                         )
                     else:
                         self.stdout.write(self.style.WARNING("Failed to encode frame."))

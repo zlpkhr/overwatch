@@ -1,0 +1,14 @@
+- [x] Create Django models for storing frames and metadata
+- [x] Implement frame extraction from RTSP stream at 1 FPS
+- [x] Add basic frame storage using Django's file storage
+- [x] Set up Celery for asynchronous tasks
+- [ ] Create task for frame embedding generation
+- [ ] Integrate Jina AI client and authentication
+- [ ] Implement frame embedding generation using Jina AI
+- [ ] Store embeddings alongside frames in database
+- [ ] Create basic Django views for listing frames
+- [ ] Add simple search endpoint using embedding similarity
+- [ ] Create basic template for displaying frames
+- [ ] Add search form to web interface
+- [ ] Implement results display with frame thumbnails
+- [ ] Add pagination for search results
