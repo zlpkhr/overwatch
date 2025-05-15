@@ -25,6 +25,9 @@ def search_frames(request):
     ]
 
     documents = compute_similarities(query, frame_embeddings)
+    top_score = documents[0]["score"] or 0
+    bottom_score = documents[-1]["score"] or 0
+    score_range = top_score - bottom_score
 
     results = []
     for doc in documents[:n_results]:
@@ -34,7 +37,8 @@ def search_frames(request):
             {
                 "id": frame.id,
                 "image": frame.image.url,
-                "score": doc["score"],
+                "score": (doc["score"] - bottom_score) / score_range,
+                "cosine_similarity": doc["score"],
             }
         )
 
