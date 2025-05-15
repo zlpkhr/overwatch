@@ -36,7 +36,7 @@ def search_frames(request):
         results.append(
             {
                 "id": frame.id,
-                "image": frame.image.url,
+                "image_url": request.build_absolute_uri(frame.image.url),
                 "score": (doc["score"] - bottom_score) / score_range,
                 "cosine_similarity": doc["score"],
             }
