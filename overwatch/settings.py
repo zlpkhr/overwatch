@@ -45,6 +45,7 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",
     "django_celery_results",
     "ingest",
+    "search",
 ]
 
 MIDDLEWARE = [
@@ -146,4 +147,4 @@ CELERY_BROKER_URL = os.getenv("CELERY_BROKER_URL", "redis://localhost:6379/0")
 RTSP_URL = os.getenv("RTSP_URL", "rtsp://localhost:8554/overwatch")
 
 MEDIA_URL = "/media/"
-MEDIA_ROOT = os.path.join(BASE_DIR, "media")
+MEDIA_ROOT = BASE_DIR / "media"
