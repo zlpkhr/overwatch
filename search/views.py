@@ -15,7 +15,8 @@ def search_frames(request):
     if not query:
         return JsonResponse({"error": "Missing query parameter q"}, status=400)
 
-    frames = Frame.objects.exclude(embeddings=None).order_by("-timestamp")
+    frames = Frame.objects.exclude(embeddings=[]).order_by("-timestamp")
+
     frame_embeddings = [
         {
             "key": f.id,

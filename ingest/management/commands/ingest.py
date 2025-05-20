@@ -7,7 +7,9 @@ from django.core.files.base import ContentFile
 from django.core.management.base import BaseCommand
 
 from ingest.models import Frame
-from ingest.tasks import generate_embeddings
+from ingest.tasks import generate_embeddings_batch
+
+BATCH_SIZE = 8
 
 
 class Command(BaseCommand):
@@ -28,6 +30,8 @@ class Command(BaseCommand):
             self.style.NOTICE("Extracting frames at 1 FPS. Press Ctrl+C to stop.")
         )
         try:
+            batch = []
+            batch_meta = []
             while cap.isOpened():
                 ret, frame = cap.read()
                 if not ret or frame is None or frame.size == 0:
@@ -41,17 +45,45 @@ class Command(BaseCommand):
                     filename = f"{timestamp.isoformat(sep='_', timespec='seconds')}.jpg"
                     success, buffer = cv2.imencode(".jpg", frame)
                     if success:
-                        frame_instance = Frame.objects.create(
-                            image=ContentFile(buffer.tobytes(), filename),
-                            timestamp=timestamp,
-                        )
-                        generate_embeddings.delay(frame_instance.id)
+                        batch.append((buffer.tobytes(), filename, timestamp))
+                        batch_meta.append((filename, timestamp))
                         self.stdout.write(
-                            self.style.SUCCESS(f"Saved frame: {frame_instance}")
+                            self.style.SUCCESS(f"Queued frame: {filename}")
                         )
                     else:
                         self.stdout.write(self.style.WARNING("Failed to encode frame."))
                     last_saved = now
+                    if len(batch) >= BATCH_SIZE:
+                        frame_ids = []
+                        for buf, filename, timestamp in batch:
+                            frame_instance = Frame.objects.create(
+                                image=ContentFile(buf, filename),
+                                timestamp=timestamp,
+                            )
+                            frame_ids.append(frame_instance.id)
+                        generate_embeddings_batch.delay(frame_ids)
+                        self.stdout.write(
+                            self.style.SUCCESS(
+                                f"Saved and dispatched batch of {len(batch)} frames."
+                            )
+                        )
+                        batch = []
+                        batch_meta = []
+            # Process any remaining frames in the last batch
+            if batch:
+                frame_ids = []
+                for buf, filename, timestamp in batch:
+                    frame_instance = Frame.objects.create(
+                        image=ContentFile(buf, filename),
+                        timestamp=timestamp,
+                    )
+                    frame_ids.append(frame_instance.id)
+                generate_embeddings_batch.delay(frame_ids)
+                self.stdout.write(
+                    self.style.SUCCESS(
+                        f"Saved and dispatched final batch of {len(batch)} frames."
+                    )
+                )
         except KeyboardInterrupt:
             self.stdout.write(self.style.WARNING("Interrupted by user."))
         finally:
