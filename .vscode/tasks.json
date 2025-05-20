@@ -36,6 +36,12 @@
       "dependsOn": ["Start mediamtx", "Stream footage"],
       "dependsOrder": "parallel",
       "problemMatcher": []
+    },
+    {
+      "label": "Run Celery Worker",
+      "type": "shell",
+      "command": "celery -A overwatch worker --loglevel=info",
+      "problemMatcher": []
     }
   ]
 }
