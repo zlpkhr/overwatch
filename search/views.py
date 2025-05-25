@@ -8,6 +8,7 @@ import requests
 from django.conf import settings
 from django.http import JsonResponse
 from django.views.decorators.http import require_GET
+from django.shortcuts import render
 
 from ingest.models import Frame
 from search.ai import embed_query
@@ -283,3 +284,10 @@ def search_frames(request):
     reranked_indices, rerank_scores = call_jina_reranker(query, images_for_rerank, n_results)
     response = compose_response(reranked_indices, id_order, id_to_frame, best, sorted_results, request, rerank_scores)
     return JsonResponse({"results": response})
+
+
+def search_page(request):
+    """
+    Render the Bootstrap-based search interface for CCTV frame search.
+    """
+    return render(request, "search/search.html")
