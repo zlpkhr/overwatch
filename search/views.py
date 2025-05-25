@@ -4,6 +4,7 @@ from django.http import JsonResponse
 from django.views.decorators.http import require_GET
 
 from ingest.models import Frame
+from search.ai import embed_query
 from search.chroma_service import ChromaService
 
 
@@ -15,8 +16,10 @@ def search_frames(request):
     if not query:
         return JsonResponse({"error": "Missing query parameter q"}, status=400)
 
+    # Use our own CLIP embed_query to ensure correct dimension
+    query_embedding = embed_query(query)
     collection = ChromaService.get_collection()
-    results = collection.query(query_texts=[query], n_results=n_results)
+    results = collection.query(query_embeddings=[query_embedding], n_results=n_results)
     ids = results.get("ids", [[]])[0]
     distances = results.get("distances", [[]])[0]
     if not ids:
