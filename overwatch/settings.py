@@ -148,3 +148,5 @@ RTSP_URL = os.getenv("RTSP_URL", "rtsp://localhost:8554/overwatch")
 
 MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
+
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")

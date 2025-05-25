@@ -15,7 +15,6 @@ class ChromaService:
             cls._client = chromadb.PersistentClient(path=cls._persist_path)
         if cls._collection is None:
             cls._collection = cls._client.get_or_create_collection(
-                name="frames",
-                metadata={"hnsw:space": "cosine"}
+                name="frames", metadata={"hnsw:space": "cosine"}
             )
         return cls._collection
