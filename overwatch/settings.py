@@ -150,3 +150,5 @@ MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
 
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+
+JINA_API_KEY = os.getenv("JINA_API_KEY")
