@@ -13,6 +13,7 @@ from ingest.models import Frame
 from search.ai import embed_query
 from search.chroma_service import ChromaService
 
+# Prompt for LLM-based query expansion
 prompt = """
 Expand a user query for a CCTV footage analysis and search tool to generate multiple variations tailored to finding relevant frames. The number of expanded queries should match the user's request.
 
@@ -46,9 +47,13 @@ Notes:
 
 
 def expand_query_llm(query, n_expansions=3):
+    """
+    Use OpenAI LLM to expand a user query into multiple natural language variations.
+    This helps cover different phrasings and aspects for more robust search.
+    Returns a list of expanded queries (strings).
+    """
     try:
         client = openai.OpenAI(api_key=settings.OPENAI_API_KEY)
-
         response = client.responses.create(
             model="gpt-4.1",
             instructions=prompt,
@@ -79,7 +84,6 @@ def expand_query_llm(query, n_expansions=3):
             top_p=1,
             store=True,
         )
-
         res = json.loads(response.output_text)["queries"]
         print(res)
         return res
@@ -89,7 +93,10 @@ def expand_query_llm(query, n_expansions=3):
 
 
 def encode_image_to_base64(image_field):
-    # Read image file and encode to base64 string
+    """
+    Read a Django ImageField and encode its contents as a base64 string.
+    Used for sending images to the Jina reranker API.
+    """
     image_field.open("rb")
     encoded = base64.b64encode(image_field.read()).decode("utf-8")
     image_field.close()
@@ -97,7 +104,10 @@ def encode_image_to_base64(image_field):
 
 
 def calculate_score(dist, min_dist, max_dist):
-    """Normalize distance to a [0,1] score (higher is better)."""
+    """
+    Normalize a distance value to a [0,1] score (higher is better).
+    If all distances are equal, returns 1.0 for all.
+    """
     dist = float(dist)
     min_dist = float(min_dist)
     max_dist = float(max_dist)
@@ -107,7 +117,12 @@ def calculate_score(dist, min_dist, max_dist):
 
 
 def get_candidate_frames(sorted_results, n_results):
-    """Fetch Frame objects for top candidate IDs, preserving order."""
+    """
+    Given sorted (frame_id, distance) pairs, fetch Frame objects for the top candidates.
+    Returns (candidate_ids, id_to_frame) where:
+      - candidate_ids: list of string frame IDs in order
+      - id_to_frame: dict mapping string frame ID to Frame instance
+    """
     candidate_ids = [frame_id for frame_id, _ in sorted_results[:n_results]]
     frames = Frame.objects.filter(id__in=candidate_ids)
     id_to_frame = {str(f.id): f for f in frames}
@@ -115,7 +130,13 @@ def get_candidate_frames(sorted_results, n_results):
 
 
 def call_jina_reranker(query, images_for_rerank, n_results):
-    """Call Jina reranker m0 with images and return reranked indices and scores."""
+    """
+    Call the Jina reranker API (m0 model) with the original query and a list of images (base64).
+    Returns a tuple (reranked_indices, rerank_scores):
+      - reranked_indices: list of indices (into id_order/images_for_rerank) in reranked order
+      - rerank_scores: list of Jina relevance scores in reranked order
+    If the API call fails, returns the original order and None for scores.
+    """
     reranked_indices = list(range(len(images_for_rerank)))
     rerank_scores = None
     if not images_for_rerank:
@@ -143,6 +164,7 @@ def call_jina_reranker(query, images_for_rerank, n_results):
         )
         if resp.status_code == 200:
             data = resp.json()
+            # Sort results by Jina's relevance score (descending)
             sorted_results = sorted(data["results"], key=lambda x: -x["relevance_score"])
             reranked_indices = [r["index"] for r in sorted_results]
             rerank_scores = [r["relevance_score"] for r in sorted_results]
@@ -152,9 +174,20 @@ def call_jina_reranker(query, images_for_rerank, n_results):
 
 
 def compose_response(reranked_indices, id_order, id_to_frame, best, sorted_results, request, rerank_scores=None):
-    """Compose the final response list in reranked order. Optionally include rerank scores."""
+    """
+    Compose the final response list in reranked order for the API response.
+    - reranked_indices: order of results after reranking (indices into id_order)
+    - id_order: original order of candidate frame IDs (as strings)
+    - id_to_frame: mapping from frame ID to Frame instance
+    - best: dict mapping frame ID to chroma distance
+    - sorted_results: original sorted (frame_id, distance) pairs from Chroma
+    - request: Django request (for building absolute image URLs)
+    - rerank_scores: optional list of Jina reranker scores (same order as reranked_indices)
+    Returns a list of dicts, each representing a result.
+    """
     # Only use the distances of the returned candidates for normalization
     candidate_dists = [float(best.get(id_order[idx], 1.0)) for idx in reranked_indices if idx < len(id_order)]
+    # Debug prints for future refactoring/diagnosis
     print(f"DEBUG: best={best}")
     print(f"DEBUG: id_order={id_order}")
     print(f"DEBUG: reranked_indices={reranked_indices}")
@@ -182,30 +215,40 @@ def compose_response(reranked_indices, id_order, id_to_frame, best, sorted_resul
         result = {
             "id": frame.id,
             "image_url": image_url,
-            "score": score,
-            "chroma_distance": dist,
+            "score": score,  # normalized chroma distance (higher is better)
+            "chroma_distance": dist,  # raw chroma distance
         }
         if rerank_scores and i < len(rerank_scores):
-            result["rerank_score"] = rerank_scores[i]
+            result["rerank_score"] = rerank_scores[i]  # Jina reranker relevance score
         response.append(result)
     return response
 
 
 @require_GET
 def search_frames(request):
+    """
+    Main search endpoint for CCTV frame retrieval.
+    Steps:
+      1. Expand the user query using LLM for robust search coverage.
+      2. Embed all expanded queries and search Chroma vector DB for candidate frames.
+      3. Deduplicate and sort candidates by best (lowest) distance.
+      4. Fetch candidate frame images and encode to base64 for reranking.
+      5. Call Jina reranker API to rerank candidates by relevance to the query.
+      6. Compose and return the final response, including both chroma and reranker scores.
+    """
     query = request.GET.get("q")
     n_results = int(request.GET.get("n", 10))
 
     if not query:
         return JsonResponse({"error": "Missing query parameter q"}, status=400)
 
-    # LLM-based multi-query expansion
+    # Step 1: LLM-based multi-query expansion
     try:
         expanded_queries = expand_query_llm(query, n_expansions=3)
     except Exception:
         expanded_queries = [query]
 
-    # Embed all expanded queries
+    # Step 2: Embed all expanded queries and search Chroma
     query_embeddings = [embed_query(q) for q in expanded_queries]
     collection = ChromaService.get_collection()
     all_results = []
@@ -214,16 +257,16 @@ def search_frames(request):
         ids = results.get("ids", [[]])[0]
         distances = results.get("distances", [[]])[0]
         all_results.extend(zip(ids, distances))
-    # Deduplicate by id, keep best (lowest) distance
+    # Step 3: Deduplicate by id, keep best (lowest) distance
     best = {}
     for frame_id, dist in all_results:
         if frame_id not in best or dist < best[frame_id]:
             best[frame_id] = dist
-    # Sort by distance
+    # Step 4: Sort by distance
     sorted_results = sorted(best.items(), key=lambda x: x[1])
     if not sorted_results:
         return JsonResponse({"results": []})
-    # --- Jina reranker integration ---
+    # Step 5: Prepare candidate frames and images for reranking
     candidate_ids, id_to_frame = get_candidate_frames(sorted_results, n_results)
     images_for_rerank = []
     id_order = []
@@ -236,6 +279,7 @@ def search_frames(request):
                 id_order.append(str(frame.id))
             except Exception:
                 continue
+    # Step 6: Call Jina reranker and compose response
     reranked_indices, rerank_scores = call_jina_reranker(query, images_for_rerank, n_results)
     response = compose_response(reranked_indices, id_order, id_to_frame, best, sorted_results, request, rerank_scores)
     return JsonResponse({"results": response})
