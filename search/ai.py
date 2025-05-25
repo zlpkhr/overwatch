@@ -2,7 +2,7 @@ import clip
 import numpy as np
 import torch
 
-device = "mps" if torch.mps.is_available() else "cpu"
+device = "cpu"
 model, preprocess = clip.load("ViT-B/32", device=device)
 
 
