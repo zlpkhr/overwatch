@@ -6,7 +6,7 @@
 - [x] Implement frame embedding generation
 - [x] Store embeddings alongside frames in database
 - [x] Add simple search endpoint using embedding similarity
-- [ ] Replace in-memory search with FAISS index for scalable similarity search
+- [x] Replace in-memory search with ChromaDB for scalable similarity search
 - [x] Implement batched frame processing for efficient embedding generation and storage
-- [ ] Design and implement a persistent embedding store and indexing process (e.g., save embeddings and FAISS index to disk/database)
+- [x] Design and implement a persistent embedding store and indexing process using ChromaDB (e.g., save embeddings and ChromaDB index to disk/database)
 - [ ] Integrate LLM-based query enhancement: multi-query expansion and re-ranking logic for improved search results
