@@ -7,8 +7,8 @@ import openai
 import requests
 from django.conf import settings
 from django.http import JsonResponse
-from django.views.decorators.http import require_GET
 from django.shortcuts import render
+from django.views.decorators.http import require_GET
 
 from ingest.models import Frame
 from search.ai import embed_query
@@ -166,7 +166,9 @@ def call_jina_reranker(query, images_for_rerank, n_results):
         if resp.status_code == 200:
             data = resp.json()
             # Sort results by Jina's relevance score (descending)
-            sorted_results = sorted(data["results"], key=lambda x: -x["relevance_score"])
+            sorted_results = sorted(
+                data["results"], key=lambda x: -x["relevance_score"]
+            )
             reranked_indices = [r["index"] for r in sorted_results]
             rerank_scores = [r["relevance_score"] for r in sorted_results]
     except Exception:
@@ -174,7 +176,15 @@ def call_jina_reranker(query, images_for_rerank, n_results):
     return reranked_indices, rerank_scores
 
 
-def compose_response(reranked_indices, id_order, id_to_frame, best, sorted_results, request, rerank_scores=None):
+def compose_response(
+    reranked_indices,
+    id_order,
+    id_to_frame,
+    best,
+    sorted_results,
+    request,
+    rerank_scores=None,
+):
     """
     Compose the final response list in reranked order for the API response.
     - reranked_indices: order of results after reranking (indices into id_order)
@@ -187,7 +197,11 @@ def compose_response(reranked_indices, id_order, id_to_frame, best, sorted_resul
     Returns a list of dicts, each representing a result.
     """
     # Only use the distances of the returned candidates for normalization
-    candidate_dists = [float(best.get(id_order[idx], 1.0)) for idx in reranked_indices if idx < len(id_order)]
+    candidate_dists = [
+        float(best.get(id_order[idx], 1.0))
+        for idx in reranked_indices
+        if idx < len(id_order)
+    ]
     # Debug prints for future refactoring/diagnosis
     print(f"DEBUG: best={best}")
     print(f"DEBUG: id_order={id_order}")
@@ -281,8 +295,18 @@ def search_frames(request):
             except Exception:
                 continue
     # Step 6: Call Jina reranker and compose response
-    reranked_indices, rerank_scores = call_jina_reranker(query, images_for_rerank, n_results)
-    response = compose_response(reranked_indices, id_order, id_to_frame, best, sorted_results, request, rerank_scores)
+    reranked_indices, rerank_scores = call_jina_reranker(
+        query, images_for_rerank, n_results
+    )
+    response = compose_response(
+        reranked_indices,
+        id_order,
+        id_to_frame,
+        best,
+        sorted_results,
+        request,
+        rerank_scores,
+    )
     return JsonResponse({"results": response})
 
 
