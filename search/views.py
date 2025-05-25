@@ -4,8 +4,7 @@ from django.http import JsonResponse
 from django.views.decorators.http import require_GET
 
 from ingest.models import Frame
-from search.ai import embed_query
-from search.faiss_service import FaissIndexService
+from search.chroma_service import ChromaService
 
 
 @require_GET
@@ -16,29 +15,26 @@ def search_frames(request):
     if not query:
         return JsonResponse({"error": "Missing query parameter q"}, status=400)
 
-    query_embedding = embed_query(query)
-    faiss_service = FaissIndexService.get_instance()
-    results = faiss_service.search(query_embedding, n_results)
-
-    if not results:
+    collection = ChromaService.get_collection()
+    results = collection.query(query_texts=[query], n_results=n_results)
+    ids = results.get("ids", [[]])[0]
+    distances = results.get("distances", [[]])[0]
+    if not ids:
         return JsonResponse({"results": []})
-
-    # Normalize scores (distances) to [0, 1] range (lower is better for L2)
-    dists = [score for _, score in results]
-    min_dist, max_dist = min(dists), max(dists)
+    min_dist, max_dist = min(distances), max(distances)
     range_dist = max_dist - min_dist if max_dist != min_dist else 1.0
-
     response = []
-    for frame_id, dist in results:
+    for frame_id, dist in zip(ids, distances):
         try:
             frame = Frame.objects.get(id=frame_id)
-            response.append({
-                "id": frame.id,
-                "image_url": request.build_absolute_uri(frame.image.url),
-                "score": 1.0 - ((dist - min_dist) / range_dist),  # higher is better
-                "faiss_distance": dist,
-            })
+            response.append(
+                {
+                    "id": frame.id,
+                    "image_url": request.build_absolute_uri(frame.image.url),
+                    "score": 1.0 - ((dist - min_dist) / range_dist),
+                    "chroma_distance": dist,
+                }
+            )
         except Frame.DoesNotExist:
             continue
-
     return JsonResponse({"results": response})
