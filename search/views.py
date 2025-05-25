@@ -4,7 +4,8 @@ from django.http import JsonResponse
 from django.views.decorators.http import require_GET
 
 from ingest.models import Frame
-from search.ai import compute_similarities
+from search.ai import embed_query
+from search.faiss_service import FaissIndexService
 
 
 @require_GET
@@ -15,32 +16,29 @@ def search_frames(request):
     if not query:
         return JsonResponse({"error": "Missing query parameter q"}, status=400)
 
-    frames = Frame.objects.exclude(embeddings=[]).order_by("-timestamp")
+    query_embedding = embed_query(query)
+    faiss_service = FaissIndexService.get_instance()
+    results = faiss_service.search(query_embedding, n_results)
 
-    frame_embeddings = [
-        {
-            "key": f.id,
-            "embeddings": f.embeddings,
-        }
-        for f in frames
-    ]
+    if not results:
+        return JsonResponse({"results": []})
 
-    documents = compute_similarities(query, frame_embeddings)
-    top_score = documents[0]["score"] or 0
-    bottom_score = documents[-1]["score"] or 0
-    score_range = top_score - bottom_score
+    # Normalize scores (distances) to [0, 1] range (lower is better for L2)
+    dists = [score for _, score in results]
+    min_dist, max_dist = min(dists), max(dists)
+    range_dist = max_dist - min_dist if max_dist != min_dist else 1.0
 
-    results = []
-    for doc in documents[:n_results]:
-        frame = frames.get(id=doc["key"])
-
-        results.append(
-            {
+    response = []
+    for frame_id, dist in results:
+        try:
+            frame = Frame.objects.get(id=frame_id)
+            response.append({
                 "id": frame.id,
                 "image_url": request.build_absolute_uri(frame.image.url),
-                "score": (doc["score"] - bottom_score) / score_range,
-                "cosine_similarity": doc["score"],
-            }
-        )
+                "score": 1.0 - ((dist - min_dist) / range_dist),  # higher is better
+                "faiss_distance": dist,
+            })
+        except Frame.DoesNotExist:
+            continue
 
-    return JsonResponse({"results": results})
+    return JsonResponse({"results": response})
