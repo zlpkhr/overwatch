@@ -4,6 +4,7 @@ from django.shortcuts import render
 
 # Create your views here.
 
+
 def live_stream(request):
     """Render the Live Stream page."""
     return render(request, "stream/live.html")

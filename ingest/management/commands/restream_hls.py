@@ -46,7 +46,9 @@ class Command(BaseCommand):
         rtsp_url = options.get("rtsp") or settings.RTSP_URL
 
         if not rtsp_url:
-            raise CommandError("RTSP URL must be provided via --rtsp or settings.RTSP_URL")
+            raise CommandError(
+                "RTSP URL must be provided via --rtsp or settings.RTSP_URL"
+            )
 
         self.stdout.write(self.style.NOTICE(f"Starting HLS restream (slug '{slug}')"))
         self._spawn_ffmpeg(slug, rtsp_url)
@@ -101,4 +103,4 @@ class Command(BaseCommand):
         proc = subprocess.Popen(cmd)
         if not hasattr(self, "_procs"):
             self._procs = []
-        self._procs.append(proc) 
+        self._procs.append(proc)
