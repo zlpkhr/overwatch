@@ -40,7 +40,7 @@
     {
       "label": "Run Celery Worker",
       "type": "shell",
-      "command": "celery -A overwatch worker --loglevel=info",
+      "command": "uv run celery -A overwatch worker --loglevel=info",
       "problemMatcher": []
     }
   ]
