@@ -13,3 +13,7 @@
 
 
 ## June 10th
+
+- [x] Integrate HLS live playback in web interface (HLS.js player with reconnect logic)
+- [x] Implement FFmpeg-based `restream_hls` command (single-tenant, uses settings.RTSP_URL)
+- [x] Create dedicated `stream` app with templates, views, and URLs to avoid clutter in core project
