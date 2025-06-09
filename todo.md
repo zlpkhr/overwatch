@@ -10,3 +10,6 @@
 - [x] Implement batched frame processing for efficient embedding generation and storage
 - [x] Design and implement a persistent embedding store and indexing process using ChromaDB (e.g., save embeddings and ChromaDB index to disk/database)
 - [x] Integrate LLM-based query enhancement: multi-query expansion and re-ranking logic for improved search results
+
+
+## June 10th
