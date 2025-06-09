@@ -20,9 +20,13 @@ from django.conf.urls.static import static
 from django.contrib import admin
 from django.urls import include, path
 
+from overwatch.views import live_stream, get_hls_url
+
 urlpatterns = [
     path("admin/", admin.site.urls),
     path("", include("search.urls")),
+    path("live/", live_stream, name="live_stream"),
+    path("get_hls_url/", get_hls_url, name="get_hls_url"),
 ]
 
 if settings.DEBUG:

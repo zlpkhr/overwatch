@@ -63,7 +63,7 @@ ROOT_URLCONF = "overwatch.urls"
 TEMPLATES = [
     {
         "BACKEND": "django.template.backends.django.DjangoTemplates",
-        "DIRS": [],
+        "DIRS": [BASE_DIR / "overwatch" / "templates"],
         "APP_DIRS": True,
         "OPTIONS": {
             "context_processors": [
