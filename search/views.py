@@ -230,6 +230,7 @@ def compose_response(
         result = {
             "id": frame.id,
             "image_url": image_url,
+            "timestamp": frame.timestamp.isoformat(),
             "score": score,  # normalized chroma distance (higher is better)
             "chroma_distance": dist,  # raw chroma distance
         }
@@ -315,3 +316,71 @@ def search_page(request):
     Render the Bootstrap-based search interface for CCTV frame search.
     """
     return render(request, "search/search.html")
+
+
+# ---------------------------------------------------------------------------
+# New lightweight endpoint: returns a list of {frame_id, timestamp, score}
+# for timeline visualisation on the frontend.
+# ---------------------------------------------------------------------------
+
+
+@require_GET
+def search_timestamps(request):
+    """Similar to search_frames but returns only timestamps for matched frames.
+
+    Query params:
+        q   – search query (required)
+        n   – number of results (default 100)
+    """
+
+    query = request.GET.get("q")
+    n_results = int(request.GET.get("n", 100))
+
+    if not query:
+        return JsonResponse({"error": "Missing query parameter q"}, status=400)
+
+    # We re-use same search approach without reranking (faster for timeline)
+    expanded_queries = [query]
+    try:
+        expanded_queries = expand_query_llm(query, n_expansions=3)
+    except Exception:
+        pass
+
+    query_embeddings = [embed_query(q) for q in expanded_queries]
+    collection = ChromaService.get_collection()
+    all_results = []
+    for emb in query_embeddings:
+        results = collection.query(query_embeddings=[emb], n_results=n_results)
+        ids = results.get("ids", [[]])[0]
+        distances = results.get("distances", [[]])[0]
+        all_results.extend(zip(ids, distances))
+
+    best = {}
+    for frame_id, dist in all_results:
+        if frame_id not in best or dist < best[frame_id]:
+            best[frame_id] = dist
+
+    sorted_results = sorted(best.items(), key=lambda x: x[1])[:n_results]
+
+    frames = Frame.objects.filter(id__in=[fid for fid, _ in sorted_results])
+    id_to_frame = {str(f.id): f for f in frames}
+
+    response_data = []
+    for frame_id, dist in sorted_results:
+        frame = id_to_frame.get(str(frame_id))
+        if not frame:
+            continue
+        try:
+            image_url = request.build_absolute_uri(frame.image.url)
+        except Exception:
+            image_url = None
+        response_data.append(
+            {
+                "id": frame.id,
+                "timestamp": frame.timestamp.isoformat(),
+                "distance": dist,
+                "image_url": image_url,
+            }
+        )
+
+    return JsonResponse({"results": response_data})

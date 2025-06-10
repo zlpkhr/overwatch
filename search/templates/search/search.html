@@ -31,6 +31,10 @@
             <button type="submit" class="btn btn-primary w-100">Search</button>
         </div>
     </form>
+    <div class="mb-4">
+        <h4>Timeline</h4>
+        <div id="timeline" class="d-flex overflow-auto" style="gap:8px;"></div>
+    </div>
     <div id="results" class="row"></div>
 </div>
 <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
@@ -62,6 +66,7 @@ $(function() {
                                 <ul class="list-group list-group-flush">
                                     <li class="list-group-item"><strong>Score:</strong> ${res.score.toFixed(3)}</li>
                                     <li class="list-group-item"><strong>Chroma Distance:</strong> ${res.chroma_distance.toFixed(3)}</li>
+                                    <li class="list-group-item"><strong>Timestamp:</strong> ${new Date(res.timestamp).toLocaleTimeString()}</li>
                                     ${res.rerank_score !== undefined ? `<li class="list-group-item"><strong>Rerank Score:</strong> ${res.rerank_score.toFixed(3)}</li>` : ''}
                                 </ul>
                             </div>
@@ -75,6 +80,35 @@ $(function() {
                 $('#results').html('<div class="alert alert-danger">Error: ' + (xhr.responseJSON?.error || 'Failed to fetch results') + '</div>');
             }
         });
+
+        // Fetch timeline data (lighter payload)
+        $.ajax({
+            url: '/search/search_timestamps/',
+            method: 'GET',
+            data: { q: query, n: n },
+            success: function(data) {
+                const results = data.results || [];
+                if (results.length === 0) {
+                    $('#timeline').html('<div class="text-muted">No timeline matches</div>');
+                    return;
+                }
+                let html = '';
+                results.forEach(function(res) {
+                    html += `
+                        <div class="position-relative" style="cursor:pointer;" data-timestamp="${res.timestamp}" data-id="${res.id}">
+                            ${res.image_url ? `<img src="${res.image_url}" alt="Frame" style="height:80px;border-radius:4px;"/>` : ''}
+                            <span class="badge bg-light text-dark position-absolute top-0 start-0">${new Date(res.timestamp).toLocaleTimeString()}</span>
+                        </div>`;
+                });
+                $('#timeline').html(html);
+            }
+        });
+    });
+
+    // Click handler: navigate to live with timestamp
+    $('#timeline').on('click', '[data-timestamp]', function() {
+        const ts = $(this).data('timestamp');
+        window.open(`/frames/play/?ts=${encodeURIComponent(ts)}`, '_blank');
     });
 });
 </script>

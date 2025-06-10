@@ -36,6 +36,7 @@
       document.addEventListener("DOMContentLoaded", function () {
         const urlParams = new URLSearchParams(window.location.search);
         const slug = urlParams.get("slug") || "live";
+        const tsParam = urlParams.get("ts");
         const video = document.getElementById("live-video");
 
         fetch(`/get_hls_url/?slug=${slug}`)
@@ -57,6 +58,20 @@
               hls.on(Hls.Events.MANIFEST_PARSED, function () {
                 video.play();
               });
+
+              if (tsParam) {
+                const tsMs = Date.parse(tsParam);
+                hls.on(Hls.Events.LEVEL_LOADED, function (event, data) {
+                  const frags = data.details.fragments;
+                  if (!frags.length || !frags[0].programDateTime) return;
+
+                  const firstMs = frags[0].programDateTime.getTime();
+                  const offsetSec = (tsMs - firstMs) / 1000;
+                  if (offsetSec > 0 && offsetSec < video.duration) {
+                    video.currentTime = offsetSec;
+                  }
+                });
+              }
 
               // Automatic recovery on fatal errors
               hls.on(Hls.Events.ERROR, function (event, data) {
@@ -84,6 +99,13 @@
               });
             } else {
               console.error("HLS not supported in this browser");
+            }
+
+            if (tsParam) {
+              const info = document.createElement('div');
+              info.className = 'alert alert-info mt-3';
+              info.innerText = `Selected frame timestamp: ${new Date(tsParam).toLocaleString()}`;
+              document.querySelector('.container').appendChild(info);
             }
           })
           .catch((err) => console.error("Failed to fetch HLS URL", err));

@@ -40,10 +40,24 @@ class Command(BaseCommand):
             type=str,
             help="Optional RTSP URL to restream (overrides settings.RTSP_URL)",
         )
+        parser.add_argument(
+            "--segment-time",
+            type=int,
+            default=1,
+            help="HLS segment duration in seconds (default: 1)",
+        )
+        parser.add_argument(
+            "--list-size",
+            type=int,
+            default=5,
+            help="Number of segments to keep in playlist (use 0 for unlimited). Default: 5",
+        )
 
     def handle(self, *args, **options):
         slug = options.get("slug", "live")
         rtsp_url = options.get("rtsp") or settings.RTSP_URL
+        segment_time = int(options.get("segment_time") or options.get("segment-time") or 1)
+        list_size = int(options.get("list_size") or options.get("list-size") or 5)
 
         if not rtsp_url:
             raise CommandError(
@@ -51,7 +65,7 @@ class Command(BaseCommand):
             )
 
         self.stdout.write(self.style.NOTICE(f"Starting HLS restream (slug '{slug}')"))
-        self._spawn_ffmpeg(slug, rtsp_url)
+        self._spawn_ffmpeg(slug, rtsp_url, segment_time, list_size)
 
         # Keep process alive (Ctrl+C to exit)
         try:
@@ -66,7 +80,7 @@ class Command(BaseCommand):
     # ------------------------------------------------------------------
     # Internal helpers
     # ------------------------------------------------------------------
-    def _spawn_ffmpeg(self, slug: str, rtsp_url: str):
+    def _spawn_ffmpeg(self, slug: str, rtsp_url: str, segment_time: int, list_size: int):
         out_dir = Path(settings.MEDIA_ROOT) / "hls" / slug
         out_dir.mkdir(parents=True, exist_ok=True)
         out_path = out_dir / "index.m3u8"
@@ -89,11 +103,11 @@ class Command(BaseCommand):
             "-f",
             "hls",
             "-hls_time",
-            "1",
+            str(segment_time),
             "-hls_list_size",
-            "5",
+            str(list_size),
             "-hls_flags",
-            "delete_segments+append_list+independent_segments",
+            "append_list+independent_segments+program_date_time",
             str(out_path),
         ]
 
