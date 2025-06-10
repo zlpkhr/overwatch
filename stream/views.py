@@ -1,8 +1,8 @@
+from datetime import datetime
+
 from django.conf import settings
 from django.http import JsonResponse
 from django.shortcuts import render
-
-from datetime import datetime
 
 from ingest.models import Frame
 
@@ -59,10 +59,9 @@ def frame_sequence(request):
         except ValueError:
             return JsonResponse({"error": "invalid before format"}, status=400)
 
-        qs = (
-            Frame.objects.filter(timestamp__lt=before_dt)
-            .order_by("-timestamp")[:count]
-        )
+        qs = Frame.objects.filter(timestamp__lt=before_dt).order_by("-timestamp")[
+            :count
+        ]
         qs = list(qs)[::-1]  # chronological order
     elif after_str:
         try:
@@ -94,4 +93,6 @@ def frame_sequence(request):
     next_after = results[-1]["timestamp"] if results else after_str
     prev_before = results[0]["timestamp"] if results else before_str
 
-    return JsonResponse({"results": results, "next_after": next_after, "prev_before": prev_before})
+    return JsonResponse(
+        {"results": results, "next_after": next_after, "prev_before": prev_before}
+    )

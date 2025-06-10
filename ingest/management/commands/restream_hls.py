@@ -56,7 +56,9 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         slug = options.get("slug", "live")
         rtsp_url = options.get("rtsp") or settings.RTSP_URL
-        segment_time = int(options.get("segment_time") or options.get("segment-time") or 1)
+        segment_time = int(
+            options.get("segment_time") or options.get("segment-time") or 1
+        )
         list_size = int(options.get("list_size") or options.get("list-size") or 5)
 
         if not rtsp_url:
@@ -80,7 +82,9 @@ class Command(BaseCommand):
     # ------------------------------------------------------------------
     # Internal helpers
     # ------------------------------------------------------------------
-    def _spawn_ffmpeg(self, slug: str, rtsp_url: str, segment_time: int, list_size: int):
+    def _spawn_ffmpeg(
+        self, slug: str, rtsp_url: str, segment_time: int, list_size: int
+    ):
         out_dir = Path(settings.MEDIA_ROOT) / "hls" / slug
         out_dir.mkdir(parents=True, exist_ok=True)
         out_path = out_dir / "index.m3u8"
