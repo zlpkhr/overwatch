@@ -29,6 +29,7 @@
         <button id="btn-next" class="btn btn-outline-primary me-2">Next</button>
         <button id="btn-reset" class="btn btn-outline-secondary me-2">Reset</button>
         <button id="btn-toggle" class="btn btn-success">Play</button>
+        <button id="btn-latest" class="btn btn-outline-primary me-2">Go to Latest</button>
       </div>
       <p class="mt-2" id="timestamp"></p>
     </div>
@@ -49,6 +50,8 @@
         const fps = 1; // matches ingestion rate
         const imgEl = $("#frame-img");
         const tsLabel = $("#timestamp");
+        const overlay=$('<div id="overlay" style="position:absolute;top:0;left:0;"></div>').css({pointerEvents:'none'});
+        imgEl.parent().css('position','relative').append(overlay);
 
         let batch = [];
         let batchIdx = 0;
@@ -87,9 +90,33 @@
           });
         }
 
+        function drawBoxes(frameId){
+          overlay.empty();
+          $.getJSON(`/search/frame/${frameId}/detections/`, function(data){
+              const dets=data.detections||[];
+              const w=imgEl[0].naturalWidth;
+              const h=imgEl[0].naturalHeight;
+              const scale=imgEl.width()/w;
+              dets.forEach(d=>{
+                  const [x1,y1,x2,y2]=d.bbox;
+                  const box=$('<div class="border border-danger position-absolute text-white small px-1"></div>').text(d.label);
+                  box.css({
+                      left:x1*w*scale+'px',
+                      top:y1*h*scale+'px',
+                      width:(x2-x1)*w*scale+'px',
+                      height:(y2-y1)*h*scale+'px',
+                      borderWidth:'2px',
+                      overflow:'hidden'
+                  });
+                  overlay.append(box);
+              });
+          });
+        }
+
         function showFrame(frame) {
           imgEl.attr("src", frame.image_url || "");
           tsLabel.text(new Date(frame.timestamp).toLocaleString());
+          drawBoxes(frame.id);
         }
 
         function stepNext() {
@@ -164,6 +191,15 @@
         $("#btn-next").on("click", stepNext);
         $("#btn-prev").on("click", stepPrev);
         $("#btn-reset").on("click", resetToInitial);
+        $("#btn-latest").on("click", ()=>{
+            $.getJSON('/frames/latest/', function(data){
+                const ts=data.timestamp;
+                nextAfter=ts;
+                history.push(data);
+                pointer=history.length-1;
+                showFrame(data);
+            });
+        });
 
         // Drive the loop with setInterval
         setInterval(advance, 1000 / fps);

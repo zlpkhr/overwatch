@@ -13,6 +13,7 @@ from django.views.decorators.http import require_GET
 from ingest.models import Frame
 from search.ai import embed_query
 from search.chroma_service import ChromaService
+from ingest.models import DetectedObject
 
 # Prompt for LLM-based query expansion
 prompt = """
@@ -272,7 +273,10 @@ def search_frames(request):
         results = collection.query(query_embeddings=[emb], n_results=n_results)
         ids = results.get("ids", [[]])[0]
         distances = results.get("distances", [[]])[0]
-        all_results.extend(zip(ids, distances))
+        metas = results.get("metadatas", [[]])[0] if results.get("metadatas") else [{}]*len(ids)
+        for _id, dist, meta in zip(ids, distances, metas):
+            frame_id = str(meta.get("frame_id") or _id.split("_", 1)[0])
+            all_results.append((frame_id, dist))
     # Step 3: Deduplicate by id, keep best (lowest) distance
     best = {}
     for frame_id, dist in all_results:
@@ -353,7 +357,10 @@ def search_timestamps(request):
         results = collection.query(query_embeddings=[emb], n_results=n_results)
         ids = results.get("ids", [[]])[0]
         distances = results.get("distances", [[]])[0]
-        all_results.extend(zip(ids, distances))
+        metas = results.get("metadatas", [[]])[0] if results.get("metadatas") else [{}]*len(ids)
+        for _id, dist, meta in zip(ids, distances, metas):
+            frame_id = str(meta.get("frame_id") or _id.split("_", 1)[0])
+            all_results.append((frame_id, dist))
 
     best = {}
     for frame_id, dist in all_results:
@@ -384,3 +391,31 @@ def search_timestamps(request):
         )
 
     return JsonResponse({"results": response_data})
+
+
+# ---------------------------------------------------------------------------
+# Endpoint: detections for a specific frame (JSON)
+# ---------------------------------------------------------------------------
+
+
+@require_GET
+def frame_detections(request, frame_id: int):
+    try:
+        frame = Frame.objects.get(id=frame_id)
+    except Frame.DoesNotExist:
+        return JsonResponse({"error": "frame not found"}, status=404)
+
+    detections_qs = frame.detections.all()
+    detections = []
+    for d in detections_qs:
+        detections.append(
+            {
+                "id": d.id,
+                "label": d.label,
+                "confidence": d.confidence,
+                "bbox": [d.x1, d.y1, d.x2, d.y2],
+                "text": d.text,
+            }
+        )
+
+    return JsonResponse({"detections": detections})

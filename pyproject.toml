@@ -8,6 +8,7 @@ dependencies = [
     "clip",
     "django>=5.2.1",
     "django-celery-results>=2.6.0",
+    "easyocr",
     "numpy>=2.2.5",
     "openai>=1.82.0",
     "opencv-python>=4.11.0.86",
@@ -15,7 +16,9 @@ dependencies = [
     "python-dotenv>=1.1.0",
     "requests>=2.32.3",
     "torch>=2.7.0",
+    "torchaudio",
     "torchvision>=0.22.0",
+    "ultralytics",
 ]
 
 [dependency-groups]

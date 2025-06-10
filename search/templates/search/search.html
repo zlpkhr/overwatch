@@ -19,7 +19,7 @@
 </head>
 <body>
 <div class="container py-5">
-    <h1 class="mb-4">CCTV Frame Search</h1>
+    <h1 class="mb-4 text-center">CCTV Semantic Search</h1>
     <form id="search-form" class="row g-3 mb-4">
         <div class="col-md-8">
             <input type="text" class="form-control" id="query" placeholder="Describe what you are looking for (e.g. 'person in red hoodie')" required>
@@ -32,19 +32,19 @@
         </div>
     </form>
     <div class="mb-4">
-        <h4>Timeline</h4>
-        <div id="timeline" class="d-flex overflow-auto" style="gap:8px;"></div>
+        <h4>Results Timeline</h4>
+        <div id="timeline" class="d-flex overflow-auto" style="gap:16px;"></div>
     </div>
-    <div id="results" class="row"></div>
 </div>
 <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 <script>
 $(function() {
     $('#search-form').on('submit', function(e) {
         e.preventDefault();
         const query = $('#query').val();
         const n = $('#n_results').val();
-        $('#results').html('<div class="text-center py-5"><div class="spinner-border" role="status"></div> Loading...</div>');
+        $('#timeline').html('<div class="text-center w-100 py-5"><div class="spinner-border" role="status"></div></div>');
         $.ajax({
             url: '/search/search_frames/',
             method: 'GET',
@@ -58,56 +58,88 @@ $(function() {
                 let html = '';
                 results.forEach(function(res) {
                     html += `
-                    <div class="col-md-4 result-card">
-                        <div class="card h-100">
-                            ${res.image_url ? `<img src="${res.image_url}" class="card-img-top frame-img" alt="Frame">` : ''}
+                    <div class="col result-card">
+                        <div class="card h-100" id="card-${res.id}">
+                            <div class="img-wrapper position-relative">
+                                ${res.image_url ? `<img src="${res.image_url}" class="card-img-top frame-img" alt="Frame" data-frame="${res.id}">` : ''}
+                            </div>
                             <div class="card-body">
-                                <h5 class="card-title">Frame ID: ${res.id}</h5>
-                                <ul class="list-group list-group-flush">
-                                    <li class="list-group-item"><strong>Score:</strong> ${res.score.toFixed(3)}</li>
-                                    <li class="list-group-item"><strong>Chroma Distance:</strong> ${res.chroma_distance.toFixed(3)}</li>
-                                    <li class="list-group-item"><strong>Timestamp:</strong> ${new Date(res.timestamp).toLocaleTimeString()}</li>
-                                    ${res.rerank_score !== undefined ? `<li class="list-group-item"><strong>Rerank Score:</strong> ${res.rerank_score.toFixed(3)}</li>` : ''}
-                                </ul>
+                                <h5 class="card-title">Frame ${res.id}</h5>
+                                <p class="card-text"><strong>${new Date(res.timestamp).toLocaleString()}</strong></p>
+                                <p class="card-text small text-muted">Score: ${res.score.toFixed(3)}${res.rerank_score !== undefined ? ', Re-rank: ' + res.rerank_score.toFixed(3) : ''}</p>
+                                <div class="detections small text-muted"><em>Loading detections...</em></div>
                             </div>
                         </div>
-                    </div>
-                    `;
+                    </div>`;
                 });
                 $('#results').html(html);
+
+                // Build timeline cards only (bigger)
+                let tHtml = '';
+                results.forEach(function(res){
+                    tHtml += `<div class="position-relative timeline-item" style="cursor:pointer;" data-timestamp="${res.timestamp}" id="card-${res.id}">
+                                <div class="img-wrapper position-relative d-inline-block">
+                                   ${res.image_url ? `<img src="${res.image_url}" alt="Frame" style="height:320px;border-radius:6px;" class="thumb-img"/>` : ''}
+                                   <span class="badge bg-dark position-absolute top-0 start-0">${new Date(res.timestamp).toLocaleTimeString()}</span>
+                                </div>
+                              </div>`;
+                });
+                $('#timeline').html(tHtml);
+
+                // fetch detections for each card
+                results.forEach(function(res) {
+                    $.getJSON(`/search/frame/${res.id}/detections/`, function(data) {
+                        const card = $(`#card-${res.id}`);
+                        const wrapper = card.find('.img-wrapper');
+                        const img = card.find('img.thumb-img');
+                        const dets = data.detections || [];
+
+                        let tooltipText = `Frame ${res.id}\n${new Date(res.timestamp).toLocaleString()}\nScore: ${res.score.toFixed(3)}${res.rerank_score!==undefined? ', R: '+res.rerank_score.toFixed(3):''}\n`;
+                        if(dets.length){
+                           tooltipText += dets.map(d=>`${d.label} (${d.confidence.toFixed(2)})${d.text?' - '+d.text:''}`).join(', ');
+                        }
+                        card.attr('data-bs-toggle','tooltip').attr('data-bs-title',tooltipText);
+
+                        function renderBoxes(){
+                            const w = img[0].naturalWidth;
+                            const h = img[0].naturalHeight;
+                            if(!w || !h){
+                                img.on('load', renderBoxes);
+                                return;
+                            }
+                            const SCALE = 320 / h;
+                            dets.forEach(function(d){
+                                const [x1,y1,x2,y2]=d.bbox;
+                                const box=$('<div class="det-box"></div>');
+                                box.css({
+                                    position:'absolute',
+                                    left:x1*w*SCALE+'px',
+                                    top:y1*h*SCALE+'px',
+                                    width:(x2-x1)*w*SCALE+'px',
+                                    height:(y2-y1)*h*SCALE+'px',
+                                    border:'2px solid #f00',
+                                    'pointer-events':'none'
+                                });
+                                wrapper.append(box);
+                            });
+                        }
+                        renderBoxes();
+                    });
+                });
+
+                // enable tooltips
+                const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+                tooltipTriggerList.map(t=>new bootstrap.Tooltip(t));
             },
             error: function(xhr) {
                 $('#results').html('<div class="alert alert-danger">Error: ' + (xhr.responseJSON?.error || 'Failed to fetch results') + '</div>');
             }
         });
-
-        // Fetch timeline data (lighter payload)
-        $.ajax({
-            url: '/search/search_timestamps/',
-            method: 'GET',
-            data: { q: query, n: n },
-            success: function(data) {
-                const results = data.results || [];
-                if (results.length === 0) {
-                    $('#timeline').html('<div class="text-muted">No timeline matches</div>');
-                    return;
-                }
-                let html = '';
-                results.forEach(function(res) {
-                    html += `
-                        <div class="position-relative" style="cursor:pointer;" data-timestamp="${res.timestamp}" data-id="${res.id}">
-                            ${res.image_url ? `<img src="${res.image_url}" alt="Frame" style="height:80px;border-radius:4px;"/>` : ''}
-                            <span class="badge bg-light text-dark position-absolute top-0 start-0">${new Date(res.timestamp).toLocaleTimeString()}</span>
-                        </div>`;
-                });
-                $('#timeline').html(html);
-            }
-        });
     });
 
     // Click handler: navigate to live with timestamp
-    $('#timeline').on('click', '[data-timestamp]', function() {
-        const ts = $(this).data('timestamp');
+    $('#timeline').on('click', '.timeline-item', function(){
+        const ts=$(this).data('timestamp');
         window.open(`/frames/play/?ts=${encodeURIComponent(ts)}`, '_blank');
     });
 });

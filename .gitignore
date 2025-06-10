@@ -5,3 +5,4 @@ db.sqlite3*
 footage.mp4
 /media/
 .env
+yolov8n.pt

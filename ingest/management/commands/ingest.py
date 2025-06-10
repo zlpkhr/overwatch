@@ -7,7 +7,7 @@ from django.core.files.base import ContentFile
 from django.core.management.base import BaseCommand
 
 from ingest.models import Frame
-from ingest.tasks import generate_embeddings_batch
+from ingest.tasks import generate_embeddings_batch, detect_objects
 
 BATCH_SIZE = 8
 
@@ -61,6 +61,8 @@ class Command(BaseCommand):
                                 timestamp=timestamp,
                             )
                             frame_ids.append(frame_instance.id)
+                            # schedule detection per frame (can be batched later)
+                            detect_objects.delay(frame_instance.id)
                         generate_embeddings_batch.delay(frame_ids)
                         self.stdout.write(
                             self.style.SUCCESS(
@@ -78,6 +80,8 @@ class Command(BaseCommand):
                         timestamp=timestamp,
                     )
                     frame_ids.append(frame_instance.id)
+                    # schedule detection per frame (can be batched later)
+                    detect_objects.delay(frame_instance.id)
                 generate_embeddings_batch.delay(frame_ids)
                 self.stdout.write(
                     self.style.SUCCESS(

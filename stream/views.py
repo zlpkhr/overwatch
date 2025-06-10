@@ -3,6 +3,7 @@ from datetime import datetime
 from django.conf import settings
 from django.http import JsonResponse
 from django.shortcuts import render
+from django.views.decorators.http import require_GET
 
 from ingest.models import Frame
 
@@ -96,3 +97,20 @@ def frame_sequence(request):
     return JsonResponse(
         {"results": results, "next_after": next_after, "prev_before": prev_before}
     )
+
+
+# ---------------------------------------------------------------------------
+# Latest frame helper
+# ---------------------------------------------------------------------------
+
+
+@require_GET
+def latest_frame(request):
+    frame = Frame.objects.order_by("-timestamp").first()
+    if not frame:
+        return JsonResponse({"error": "no frames"}, status=404)
+    try:
+        img_url = request.build_absolute_uri(frame.image.url)
+    except Exception:
+        img_url = None
+    return JsonResponse({"id": frame.id, "timestamp": frame.timestamp.isoformat(), "image_url": img_url})
