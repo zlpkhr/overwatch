@@ -17,3 +17,8 @@
 - [x] Integrate HLS live playback in web interface (HLS.js player with reconnect logic)
 - [x] Implement FFmpeg-based `restream_hls` command (single-tenant, uses settings.RTSP_URL)
 - [x] Create dedicated `stream` app with templates, views, and URLs to avoid clutter in core project
+- [x] Display matched frames on timeline and searchable result list
+- [x] Backend `search_timestamps` endpoint returning search-aligned frame timestamps
+- [x] Timeline thumbnails link to player /live or frame-based playback
+- [x] Implement `frame_player` archive viewer: play/pause toggle, next/prev, reset to initial frame, dynamic timestamp label
+- [x] Extend `frame_sequence` API with forward/backward cursors (`after`, `before`, `inc`) to support smooth navigation
