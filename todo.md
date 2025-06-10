@@ -22,3 +22,12 @@
 - [x] Timeline thumbnails link to player /live or frame-based playback
 - [x] Implement `frame_player` archive viewer: play/pause toggle, next/prev, reset to initial frame, dynamic timestamp label
 - [x] Extend `frame_sequence` API with forward/backward cursors (`after`, `before`, `inc`) to support smooth navigation
+- [x] YOLOv8 + EasyOCR integration for object detection and text extraction
+- [x] `DetectedObject` model with bounding boxes, OCR text, crop embeddings
+- [x] Celery task `detect_objects` wired into ingest pipeline
+- [x] Crop embeddings indexed in Chroma and merged into frame ranking
+- [x] `/search/frame/<id>/detections/` API for detection metadata
+- [x] Unified search UI with large timeline cards (320 px) and bounding-box overlays
+- [x] Tooltip hover displaying full frame info and detection summary
+- [x] Loading spinner while search executes
+- [x] Frame-player overlays with labelled boxes and "Go to Latest" control
