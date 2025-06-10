@@ -7,7 +7,7 @@ from django.core.files.base import ContentFile
 from django.core.management.base import BaseCommand
 
 from ingest.models import Frame
-from ingest.tasks import generate_embeddings_batch, detect_objects
+from ingest.tasks import detect_objects, generate_embeddings_batch
 
 BATCH_SIZE = 8
 

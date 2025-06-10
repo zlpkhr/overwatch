@@ -113,4 +113,6 @@ def latest_frame(request):
         img_url = request.build_absolute_uri(frame.image.url)
     except Exception:
         img_url = None
-    return JsonResponse({"id": frame.id, "timestamp": frame.timestamp.isoformat(), "image_url": img_url})
+    return JsonResponse(
+        {"id": frame.id, "timestamp": frame.timestamp.isoformat(), "image_url": img_url}
+    )

@@ -13,10 +13,13 @@ class Frame(models.Model):
 # Detected objects metadata
 # ------------------------------------------------------------------
 
+
 class DetectedObject(models.Model):
     """Detected object or OCR text within a frame."""
 
-    frame = models.ForeignKey(Frame, related_name="detections", on_delete=models.CASCADE)
+    frame = models.ForeignKey(
+        Frame, related_name="detections", on_delete=models.CASCADE
+    )
     label = models.CharField(max_length=100)
     confidence = models.FloatField()
 

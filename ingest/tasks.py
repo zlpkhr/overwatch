@@ -1,23 +1,19 @@
-from celery import shared_task
-
-from ingest.ai import embed_frame, embed_frames_batch
-from ingest.models import Frame
-from ingest.models import DetectedObject
-from search.chroma_service import ChromaService
-
 # ---------------------------------------------------------------------------
 # Object detection + OCR helpers (YOLOv8 + EasyOCR)
 # ---------------------------------------------------------------------------
-
 import io
-from pathlib import Path
 
 import numpy as np
+from celery import shared_task
 from PIL import Image
 
+from ingest.ai import embed_frame, embed_frames_batch
+from ingest.models import DetectedObject, Frame
+from search.chroma_service import ChromaService
+
 try:
-    from ultralytics import YOLO
     import easyocr
+    from ultralytics import YOLO
 
     _yolo_model = YOLO("yolov8n.pt")  # tiny model
     _ocr_reader = easyocr.Reader(["en"], gpu=False)
@@ -47,11 +43,13 @@ def _detect_objects(frame_bytes):
     for box, cls_idx, conf in zip(res.boxes.xyxy, res.boxes.cls, res.boxes.conf):
         x1, y1, x2, y2 = box.tolist()
         label = _yolo_model.names[int(cls_idx)]
-        detections.append({
-            "bbox": [x1, y1, x2, y2],
-            "label": label,
-            "confidence": float(conf),
-        })
+        detections.append(
+            {
+                "bbox": [x1, y1, x2, y2],
+                "label": label,
+                "confidence": float(conf),
+            }
+        )
     return detections, img
 
 
@@ -109,6 +107,7 @@ def extract_objects_and_save(frame: Frame):
 # Celery tasks
 # ---------------------------------------------------------------------------
 
+
 @shared_task
 def generate_embeddings(frame_id: int):
     frame = Frame.objects.get(id=frame_id)
@@ -136,6 +135,7 @@ def generate_embeddings_batch(frame_ids: list[int]):
 
 
 # Object detection/OCR task ---------------------------------------------------
+
 
 @shared_task
 def detect_objects(frame_id: int):

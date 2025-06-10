@@ -1,6 +1,12 @@
 from django.urls import path
 
-from stream.views import frame_player, frame_sequence, get_hls_url, live_stream, latest_frame
+from stream.views import (
+    frame_player,
+    frame_sequence,
+    get_hls_url,
+    latest_frame,
+    live_stream,
+)
 
 urlpatterns = [
     path("live/", live_stream, name="live_stream"),

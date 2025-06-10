@@ -13,7 +13,6 @@ from django.views.decorators.http import require_GET
 from ingest.models import Frame
 from search.ai import embed_query
 from search.chroma_service import ChromaService
-from ingest.models import DetectedObject
 
 # Prompt for LLM-based query expansion
 prompt = """
@@ -273,7 +272,11 @@ def search_frames(request):
         results = collection.query(query_embeddings=[emb], n_results=n_results)
         ids = results.get("ids", [[]])[0]
         distances = results.get("distances", [[]])[0]
-        metas = results.get("metadatas", [[]])[0] if results.get("metadatas") else [{}]*len(ids)
+        metas = (
+            results.get("metadatas", [[]])[0]
+            if results.get("metadatas")
+            else [{}] * len(ids)
+        )
         for _id, dist, meta in zip(ids, distances, metas):
             frame_id = str(meta.get("frame_id") or _id.split("_", 1)[0])
             all_results.append((frame_id, dist))
@@ -357,7 +360,11 @@ def search_timestamps(request):
         results = collection.query(query_embeddings=[emb], n_results=n_results)
         ids = results.get("ids", [[]])[0]
         distances = results.get("distances", [[]])[0]
-        metas = results.get("metadatas", [[]])[0] if results.get("metadatas") else [{}]*len(ids)
+        metas = (
+            results.get("metadatas", [[]])[0]
+            if results.get("metadatas")
+            else [{}] * len(ids)
+        )
         for _id, dist, meta in zip(ids, distances, metas):
             frame_id = str(meta.get("frame_id") or _id.split("_", 1)[0])
             all_results.append((frame_id, dist))
