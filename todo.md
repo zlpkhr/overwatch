@@ -31,3 +31,16 @@
 - [x] Tooltip hover displaying full frame info and detection summary
 - [x] Loading spinner while search executes
 - [x] Frame-player overlays with labelled boxes and "Go to Latest" control
+
+
+## June 30th – Sprint 5 (Alerting)
+
+- [x] Design and implement rule-based alerting engine (metadata + CLIP embedding conditions)
+- [x] Add post-save signal hooks so alerts trigger on every new `DetectedObject` and whole-frame embedding
+- [x] Create `alerts` app with models (`AlertRule`, `Alert`) and evaluation engine
+- [x] Alert management UI – create / edit / delete rules with similarity slider and description field
+- [x] Alerts dashboard listing recent alerts with thumbnails and localised timestamps
+- [x] Global navbar integration across Search, Live Stream, Frame-player, Alerts
+- [x] Browser notifications for new (unacknowledged) alerts on any page; auto-ack after delivery
+- [x] `/api/alerts/*` endpoints: unacked, recent, acknowledge
+- [x] Added detailed logging in `alerts.engine` for easier debugging
