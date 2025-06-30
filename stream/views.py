@@ -6,6 +6,7 @@ from django.shortcuts import render
 from django.views.decorators.http import require_GET
 
 from ingest.models import Frame
+from ingest.models import Camera
 
 # Create your views here.
 
@@ -116,3 +117,15 @@ def latest_frame(request):
     return JsonResponse(
         {"id": frame.id, "timestamp": frame.timestamp.isoformat(), "image_url": img_url}
     )
+
+
+# ---------------------------------------------------------------------------
+# NEW: Live mosaic (multi-camera wall)
+# ---------------------------------------------------------------------------
+
+
+def live_mosaic(request):
+    """Render a CCTV-room style mosaic of all active camera streams."""
+
+    cameras = Camera.objects.filter(is_active=True).order_by("name")
+    return render(request, "stream/mosaic.html", {"cameras": cameras})
