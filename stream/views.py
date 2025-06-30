@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Any
 
 from django.conf import settings
 from django.http import JsonResponse
@@ -183,7 +184,7 @@ def frame_sequence_sync(request):
 
     results = []
     for key in sync_keys_qs:
-        frame_map = {c.slug: None for c in cameras}
+        frame_map: dict[str, Any | None] = {c.slug: None for c in cameras}  # type: ignore[valid-type]
         frames = Frame.objects.filter(sync_key=key)
         for f in frames:
             slug = slug_map.get(f.camera_id)
