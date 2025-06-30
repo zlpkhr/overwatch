@@ -49,10 +49,15 @@ class Frame(models.Model):
 
     def save(self, *args, **kwargs):  # noqa: D401
         """Populate *sync_key* on first save if missing."""
-        if not self.sync_key and self.timestamp:
+        # Need timestamp to generate sync_key – ensure we have primary key first.
+        created = self.pk is None
+        super().save(*args, **kwargs)
+
+        if created and not self.sync_key and self.timestamp:
             ts = self.timestamp.replace(microsecond=0)
             self.sync_key = ts.isoformat()
-        super().save(*args, **kwargs)
+            # avoid infinite recursion by updating only this field
+            super().save(update_fields=["sync_key"])
 
 
 # ------------------------------------------------------------------

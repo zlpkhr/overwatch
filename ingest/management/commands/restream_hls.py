@@ -5,6 +5,8 @@ from pathlib import Path
 from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
 
+from ingest.models import Camera
+
 # ---------------------------------------------------------------------------
 # NOTE: This command is a *very* thin wrapper around FFmpeg. It is intended
 # for development and small-scale deployments. For production you may want to
@@ -55,7 +57,16 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         slug = options.get("slug", "live")
-        rtsp_url = options.get("rtsp") or settings.RTSP_URL
+        rtsp_url = options.get("rtsp")
+        if not rtsp_url:
+            # Try to resolve from Camera model using slug
+            try:
+                cam = Camera.objects.get(slug=slug)
+                rtsp_url = cam.rtsp_url
+            except Camera.DoesNotExist:
+                rtsp_url = None
+
+        rtsp_url = rtsp_url or settings.RTSP_URL
         segment_time = int(
             options.get("segment_time") or options.get("segment-time") or 1
         )
