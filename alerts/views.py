@@ -41,6 +41,8 @@ def unacked_alerts(request):
                 "image_url": image_url,
                 "frame_id": a.frame.id if a.frame else None,
                 "frame_player_url": player_url,
+                "camera_slug": getattr(a.frame.camera, "slug", None) if a.frame else None,
+                "camera_name": getattr(a.frame.camera, "name", None) if a.frame else None,
             }
         )
     return JsonResponse({"results": results})
@@ -95,6 +97,8 @@ def recent_alerts(request):
                 "image_url": image_url,
                 "frame_id": a.frame.id if a.frame else None,
                 "frame_player_url": player_url,
+                "camera_slug": getattr(a.frame.camera, "slug", None) if a.frame else None,
+                "camera_name": getattr(a.frame.camera, "name", None) if a.frame else None,
                 "acknowledged": a.acknowledged,
             }
         )

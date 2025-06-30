@@ -233,6 +233,8 @@ def compose_response(
             "timestamp": frame.timestamp.isoformat(),
             "score": score,  # normalized chroma distance (higher is better)
             "chroma_distance": dist,  # raw chroma distance
+            "camera_slug": getattr(frame.camera, "slug", None),
+            "camera_name": getattr(frame.camera, "name", None),
         }
         if rerank_scores and i < len(rerank_scores):
             result["rerank_score"] = rerank_scores[i]  # Jina reranker relevance score
@@ -394,6 +396,8 @@ def search_timestamps(request):
                 "timestamp": frame.timestamp.isoformat(),
                 "distance": dist,
                 "image_url": image_url,
+                "camera_slug": getattr(frame.camera, "slug", None),
+                "camera_name": getattr(frame.camera, "name", None),
             }
         )
 

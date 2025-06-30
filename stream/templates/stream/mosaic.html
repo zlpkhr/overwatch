@@ -1,0 +1,56 @@
+{% extends 'base.html' %}
+{% block title %}Live Mosaic{% endblock %}
+{% block content %}
+<h1 class="text-center mb-4">Live Multi-Camera Feed</h1>
+<div id="mosaic" class="row row-cols-1 row-cols-sm-2 row-cols-md-3 g-3">
+  {% for cam in cameras %}
+  <div class="col">
+    <div class="card bg-dark text-white shadow-sm">
+      <div class="card-header p-2">{{ cam.name }}</div>
+      <div class="ratio ratio-16x9 position-relative">
+        <video id="video-{{ cam.slug }}" class="w-100 h-100" data-slug="{{ cam.slug }}" playsinline muted style="background:#000;"></video>
+        <div class="no-signal d-flex flex-column justify-content-center align-items-center text-center position-absolute top-0 bottom-0 start-0 end-0" style="display:none;background:#000;">
+          <span class="text-danger fw-bold">NO&nbsp;SIGNAL</span>
+        </div>
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+<script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+<script>
+function markNoSignal(video){
+  const overlay=video.parentElement.querySelector('.no-signal');
+  if(overlay) overlay.style.display='flex';
+}
+
+document.addEventListener('DOMContentLoaded', ()=>{
+  document.querySelectorAll('video[data-slug]').forEach(video=>{
+    const slug = video.dataset.slug;
+    fetch(`/get_hls_url/?slug=${slug}`)
+      .then(r=>r.json())
+      .then(data=>{
+        if(!data.hls_url){markNoSignal(video);return;}
+        const src = data.hls_url + (data.hls_url.includes('?')?'&':'?') + 't=' + Date.now(); // bust cache
+        if(Hls.isSupported()){
+          const hls = new Hls({lowLatencyMode:true, backBufferLength:90});
+          hls.loadSource(src);
+          hls.attachMedia(video);
+          hls.on(Hls.Events.ERROR, (evt, data)=>{
+            if(data.fatal){
+              markNoSignal(video);
+              hls.destroy();
+            }
+          });
+        }else if(video.canPlayType('application/vnd.apple.mpegurl')){
+          video.src = src;
+          video.addEventListener('error', ()=>markNoSignal(video));
+        }else{
+          markNoSignal(video);
+        }
+      })
+      .catch(()=>markNoSignal(video));
+  });
+});
+</script>
+{% endblock %}

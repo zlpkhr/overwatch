@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Any
 
 from django.conf import settings
 from django.http import JsonResponse
@@ -6,6 +7,7 @@ from django.shortcuts import render
 from django.views.decorators.http import require_GET
 
 from ingest.models import Frame
+from ingest.models import Camera
 
 # Create your views here.
 
@@ -116,3 +118,89 @@ def latest_frame(request):
     return JsonResponse(
         {"id": frame.id, "timestamp": frame.timestamp.isoformat(), "image_url": img_url}
     )
+
+
+# ---------------------------------------------------------------------------
+# NEW: Live mosaic (multi-camera wall)
+# ---------------------------------------------------------------------------
+
+
+def live_mosaic(request):
+    """Render a CCTV-room style mosaic of all active camera streams."""
+
+    cameras = Camera.objects.filter(is_active=True).order_by("name")
+    return render(request, "stream/mosaic.html", {"cameras": cameras})
+
+
+# ---------------------------------------------------------------------------
+# Multi-camera frame player (synchronised by sync_key)
+# ---------------------------------------------------------------------------
+
+
+def multi_frame_player(request):
+    """Renders the multi-camera frame player starting at given timestamp."""
+
+    cams = list(Camera.objects.filter(is_active=True).order_by("name"))
+    import json
+
+    cameras_json = json.dumps([c.slug for c in cams])
+    return render(
+        request,
+        "stream/multi_frame_player.html",
+        {"cameras_json": cameras_json, "cameras": cams},
+    )
+
+
+@require_GET
+def frame_sequence_sync(request):
+    """Return sequence of synchronised frames across cameras (JSON).
+
+    Query params:
+        after   ISO-8601 timestamp – start (inclusive)
+        count   int – number of seconds to return (default 60)
+    """
+
+    count = int(request.GET.get("count", 60))
+    after_str = request.GET.get("after")
+
+    if not after_str:
+        return JsonResponse({"error": "missing after parameter"}, status=400)
+
+    try:
+        after_dt = datetime.fromisoformat(after_str)
+    except ValueError:
+        return JsonResponse({"error": "invalid after format"}, status=400)
+
+    # Get distinct sync_keys >= after_dt, limit to count
+    sync_keys_qs = (
+        Frame.objects.filter(timestamp__gte=after_dt)
+        .order_by("sync_key")
+        .values_list("sync_key", flat=True)
+        .distinct()
+    )[:count]
+
+    cameras = list(Camera.objects.filter(is_active=True))
+    slug_map = {c.id: c.slug for c in cameras}
+
+    results = []
+    for key in sync_keys_qs:
+        frame_map: dict[str, Any | None] = {c.slug: None for c in cameras}  # type: ignore[valid-type]
+        frames = Frame.objects.filter(sync_key=key)
+        for f in frames:
+            slug = slug_map.get(f.camera_id)
+            if not slug:
+                continue
+            try:
+                img_url = request.build_absolute_uri(f.image.url)
+            except Exception:
+                img_url = None
+            frame_map[slug] = {
+                "id": f.id,
+                "timestamp": f.timestamp.isoformat(),
+                "image_url": img_url,
+            }
+        results.append({"sync_key": key, "frames": frame_map})
+
+    next_after = results[-1]["sync_key"] if results else after_str
+
+    return JsonResponse({"results": results, "next_after": next_after})

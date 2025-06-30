@@ -4,23 +4,52 @@ from datetime import datetime
 import cv2
 from django.conf import settings
 from django.core.files.base import ContentFile
-from django.core.management.base import BaseCommand
+from django.core.management.base import BaseCommand, CommandError
 
-from ingest.models import Frame
+from ingest.models import Camera, Frame
 from ingest.tasks import detect_objects, generate_embeddings_batch
 
+# Default batch size for embedding/detection jobs
 BATCH_SIZE = 8
 
 
 class Command(BaseCommand):
     help = "Connects to an RTSP stream, extracts frames at 1 FPS, and saves them using Django's storage system."
 
-    def handle(self, *args, **options):
-        self.stdout.write(
-            self.style.NOTICE(f"Connecting to RTSP stream: {settings.RTSP_URL}")
+    def add_arguments(self, parser):
+        parser.add_argument(
+            "--slug",
+            type=str,
+            default="default",
+            help="Camera slug to ingest (default: 'default')",
+        )
+        parser.add_argument(
+            "--rtsp",
+            type=str,
+            help="Override RTSP URL (otherwise use camera.rtsp_url)",
         )
 
-        cap = cv2.VideoCapture(settings.RTSP_URL)
+    def handle(self, *args, **options):
+        # ------------------------------------------------------------------
+        # Retrieve camera information
+        # ------------------------------------------------------------------
+
+        slug = options.get("slug", "default")
+        rtsp_override = options.get("rtsp")
+
+        try:
+            camera = Camera.objects.get(slug=slug)
+        except Camera.DoesNotExist:
+            raise CommandError(f"Camera with slug '{slug}' does not exist.")
+
+        rtsp_url = rtsp_override or camera.rtsp_url or getattr(settings, "RTSP_URL", None)
+
+        if not rtsp_url:
+            raise CommandError("RTSP URL missing (camera.rtsp_url or --rtsp or settings.RTSP_URL)")
+
+        self.stdout.write(self.style.NOTICE(f"[{slug}] Connecting to RTSP stream: {rtsp_url}"))
+
+        cap = cv2.VideoCapture(rtsp_url)
         if not cap.isOpened():
             self.stdout.write(self.style.ERROR("Failed to open RTSP stream."))
             return
@@ -59,6 +88,7 @@ class Command(BaseCommand):
                             frame_instance = Frame.objects.create(
                                 image=ContentFile(buf, filename),
                                 timestamp=timestamp,
+                                camera=camera,
                             )
                             frame_ids.append(frame_instance.id)
                             # schedule detection per frame (can be batched later)
@@ -78,6 +108,7 @@ class Command(BaseCommand):
                     frame_instance = Frame.objects.create(
                         image=ContentFile(buf, filename),
                         timestamp=timestamp,
+                        camera=camera,
                     )
                     frame_ids.append(frame_instance.id)
                     # schedule detection per frame (can be batched later)
