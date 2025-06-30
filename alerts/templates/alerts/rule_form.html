@@ -2,7 +2,12 @@
 {% block title %}{% if is_new %}New{% else %}Edit{% endif %} Alert Rule{% endblock %}
 {% block content %}
     <h1 class="mb-3">{% if is_new %}Create{% else %}Edit{% endif %} Alert Rule</h1>
-    <form method="post">
+    {% if not is_new %}
+    <p>
+      <a href="{% url 'alert_rule_images' rule.pk %}" class="btn btn-sm btn-outline-primary">Manage reference images ({{ rule.reference_images.count }})</a>
+    </p>
+    {% endif %}
+    <form method="post" enctype="multipart/form-data">
         {% csrf_token %}
         <div class="mb-3">
             {{ form.name.label_tag }}
@@ -19,6 +24,13 @@
             <label for="id_min_similarity" class="form-label">Match accuracy (<span id="sim-val">{{ form.min_similarity.value|default:form.min_similarity.initial|default:15 }}</span>%)</label>
             {{ form.min_similarity }}
         </div>
+        {% if is_new %}
+        <div class="mb-3">
+            <label class="form-label">Reference images</label>
+            <input type="file" name="reference_images" multiple accept="image/*" class="form-control"/>
+            <small class="text-muted">You can add or remove images later.</small>
+        </div>
+        {% endif %}
         <button type="submit" class="btn btn-success">Save</button>
         <a href="{% url 'alert_rule_list' %}" class="btn btn-secondary">Cancel</a>
     </form>

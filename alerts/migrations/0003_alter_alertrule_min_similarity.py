@@ -4,15 +4,17 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('alerts', '0002_remove_alertrule_max_distance_and_more'),
+        ("alerts", "0002_remove_alertrule_max_distance_and_more"),
     ]
 
     operations = [
         migrations.AlterField(
-            model_name='alertrule',
-            name='min_similarity',
-            field=models.PositiveSmallIntegerField(default=30, help_text='Required similarity between rule description and detection embedding (0-100, higher = stricter)'),
+            model_name="alertrule",
+            name="min_similarity",
+            field=models.PositiveSmallIntegerField(
+                default=30,
+                help_text="Required similarity between rule description and detection embedding (0-100, higher = stricter)",
+            ),
         ),
     ]

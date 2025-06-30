@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from alerts.models import Alert, AlertRule
+from alerts.models import Alert, AlertReferenceImage, AlertRule
 
 
 @admin.register(AlertRule)
@@ -14,4 +14,11 @@ class AlertRuleAdmin(admin.ModelAdmin):
 class AlertAdmin(admin.ModelAdmin):
     list_display = ("timestamp", "rule", "frame", "acknowledged")
     list_filter = ("acknowledged", "rule__name")
-    date_hierarchy = "timestamp" 
+    date_hierarchy = "timestamp"
+
+
+@admin.register(AlertReferenceImage)
+class AlertReferenceImageAdmin(admin.ModelAdmin):
+    list_display = ("id", "rule", "created_at")
+    search_fields = ("rule__name",)
+    readonly_fields = ("embedding",)

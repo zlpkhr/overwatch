@@ -1,0 +1,26 @@
+{% extends 'base.html' %}
+{% block title %}Reference Images – {{ rule.name }}{% endblock %}
+{% block content %}
+<h1 class="mb-3">Reference Images for "{{ rule.name }}"</h1>
+<a href="{% url 'alert_rule_list' %}" class="btn btn-secondary btn-sm mb-3">← Back to rules</a>
+<div class="row">
+  {% for img in images %}
+  <div class="col-6 col-md-3 mb-4 text-center">
+    <img src="{{ img.image.url }}" class="img-fluid rounded border">
+    <small class="d-block text-muted mt-1">ID {{ img.id }}</small>
+  </div>
+  {% empty %}
+  <p>No reference images yet.</p>
+  {% endfor %}
+</div>
+<hr/>
+<h3>Add image</h3>
+<form method="post" enctype="multipart/form-data" class="mb-5">
+  {% csrf_token %}
+  <div class="mb-3">
+    {{ form.image.label_tag }}
+    {{ form.image }}
+  </div>
+  <button type="submit" class="btn btn-primary">Upload</button>
+</form>
+{% endblock %} 

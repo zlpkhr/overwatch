@@ -17,7 +17,9 @@ class AlertRule(models.Model):
 
     # OCR text condition --------------------------------------------------------
     text_contains = models.CharField(
-        max_length=200, blank=True, help_text="Case-insensitive substring search on OCR text"
+        max_length=200,
+        blank=True,
+        help_text="Case-insensitive substring search on OCR text",
     )
 
     # User friendly description field -----------------------------------------
@@ -74,4 +76,41 @@ class Alert(models.Model):
         ordering = ["-timestamp"]
 
     def __str__(self):
-        return f"Alert {self.id} – {self.rule.name}" 
+        return f"Alert {self.id} – {self.rule.name}"
+
+
+class AlertReferenceImage(models.Model):
+    """User-provided reference image used for similarity-based alert rules."""
+
+    rule = models.ForeignKey(
+        AlertRule, related_name="reference_images", on_delete=models.CASCADE
+    )
+    image = models.ImageField(upload_to="alert_refs")
+    # CLIP embedding vector of the image
+    embedding = models.JSONField(blank=True, null=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def save(self, *args, **kwargs):
+        # Compute and store embedding *before* the file is permanently saved.
+        # Important: do not close the underlying UploadedFile – Django still
+        # needs to read it when persisting to storage.
+        if self.image and (self._state.adding or not self.embedding):
+            try:
+                from ingest.ai import embed_frame  # local import to avoid circular deps
+
+                # Ensure pointer at start
+                if hasattr(self.image, "seek"):
+                    self.image.seek(0)
+                bytes_data = self.image.read()
+                # Rewind so subsequent save can still read
+                if hasattr(self.image, "seek"):
+                    self.image.seek(0)
+
+                self.embedding = embed_frame(bytes_data)
+            except Exception:
+                pass  # don't block save if embedding fails
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"RefImage {self.id} for {self.rule.name}"

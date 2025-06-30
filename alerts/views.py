@@ -1,14 +1,13 @@
 from __future__ import annotations
 
-from django.http import JsonResponse, HttpResponseRedirect
-from django.shortcuts import get_object_or_404, render, redirect
+from django.http import HttpResponseRedirect, JsonResponse
+from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
-from django.views.decorators.http import require_GET, require_POST
 from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.http import require_GET, require_POST
 
-from alerts.forms import AlertRuleForm
+from alerts.forms import AlertReferenceImageForm, AlertRuleForm
 from alerts.models import Alert, AlertRule
-
 
 # ---------------------------------------------------------------------------
 # Alert feed + page
@@ -26,6 +25,13 @@ def unacked_alerts(request):
             image_url = request.build_absolute_uri(a.frame.image.url)
         except Exception:
             image_url = None
+        player_url = (
+            request.build_absolute_uri(
+                reverse("frame_player") + f"?ts={a.frame.timestamp.isoformat()}"
+            )
+            if a.frame
+            else None
+        )
         results.append(
             {
                 "id": a.id,
@@ -33,6 +39,8 @@ def unacked_alerts(request):
                 "rule_name": a.rule.name,
                 "label": getattr(a.detection, "label", ""),
                 "image_url": image_url,
+                "frame_id": a.frame.id if a.frame else None,
+                "frame_player_url": player_url,
             }
         )
     return JsonResponse({"results": results})
@@ -71,6 +79,13 @@ def recent_alerts(request):
             image_url = request.build_absolute_uri(a.frame.image.url)
         except Exception:
             image_url = None
+        player_url = (
+            request.build_absolute_uri(
+                reverse("frame_player") + f"?ts={a.frame.timestamp.isoformat()}"
+            )
+            if a.frame
+            else None
+        )
         results.append(
             {
                 "id": a.id,
@@ -78,6 +93,8 @@ def recent_alerts(request):
                 "rule_name": a.rule.name,
                 "label": getattr(a.detection, "label", ""),
                 "image_url": image_url,
+                "frame_id": a.frame.id if a.frame else None,
+                "frame_player_url": player_url,
                 "acknowledged": a.acknowledged,
             }
         )
@@ -94,14 +111,28 @@ def rule_list(request):
 
 
 def rule_new(request):
+    """Create a new alert rule and optionally upload reference images in same form."""
+
     if request.method == "POST":
         form = AlertRuleForm(request.POST)
         if form.is_valid():
-            form.save()
+            rule = form.save()
+
+            # Handle uploaded reference images (may be multiple)
+            from alerts.models import AlertReferenceImage
+
+            for file in request.FILES.getlist("reference_images"):
+                AlertReferenceImage.objects.create(rule=rule, image=file)
+
             return redirect("alert_rule_list")
     else:
         form = AlertRuleForm()
-    return render(request, "alerts/rule_form.html", {"form": form, "is_new": True})
+
+    return render(
+        request,
+        "alerts/rule_form.html",
+        {"form": form, "is_new": True},
+    )
 
 
 def rule_edit(request, pk: int):
@@ -113,7 +144,9 @@ def rule_edit(request, pk: int):
             return redirect("alert_rule_list")
     else:
         form = AlertRuleForm(instance=rule)
-    return render(request, "alerts/rule_form.html", {"form": form, "is_new": False, "rule": rule})
+    return render(
+        request, "alerts/rule_form.html", {"form": form, "is_new": False, "rule": rule}
+    )
 
 
 def rule_delete(request, pk: int):
@@ -121,4 +154,31 @@ def rule_delete(request, pk: int):
     if request.method == "POST":
         rule.delete()
         return redirect("alert_rule_list")
-    return render(request, "alerts/rule_delete_confirm.html", {"rule": rule}) 
+    return render(request, "alerts/rule_delete_confirm.html", {"rule": rule})
+
+
+# ---------------------------------------------------------------------------
+# Reference images management for a rule
+# ---------------------------------------------------------------------------
+
+
+def rule_images(request, pk: int):
+    """List and upload reference images for an AlertRule."""
+
+    rule = get_object_or_404(AlertRule, pk=pk)
+
+    if request.method == "POST":
+        form = AlertReferenceImageForm(request.POST, request.FILES)
+        if form.is_valid():
+            ref_img = form.save(commit=False)
+            ref_img.rule = rule
+            ref_img.save()
+            return HttpResponseRedirect(request.path_info)
+    else:
+        form = AlertReferenceImageForm()
+
+    return render(
+        request,
+        "alerts/rule_images.html",
+        {"rule": rule, "form": form, "images": rule.reference_images.all()},
+    )

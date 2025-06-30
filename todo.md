@@ -44,3 +44,13 @@
 - [x] Browser notifications for new (unacknowledged) alerts on any page; auto-ack after delivery
 - [x] `/api/alerts/*` endpoints: unacked, recent, acknowledge
 - [x] Added detailed logging in `alerts.engine` for easier debugging
+
+
+## June 30th – Sprint 6 (Alerting v2)
+
+- [x] Implement image-based alert triggers (CLIP similarity vs. reference images)
+- [x] Allow uploading reference images during rule creation and via dedicated management page
+- [x] Store reference image embeddings automatically, reuse during evaluation
+- [x] Update alert evaluation engine to prioritise reference-image similarity over description embedding
+- [x] Extend Alerts API payloads with frame IDs & deep-link to frame player; make dashboard rows clickable
+- [x] Fixed async signal bug in `_notify_clients` and file-pointer bug in reference image save logic

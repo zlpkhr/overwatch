@@ -4,15 +4,14 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('ingest', '0006_alter_detectedobject_frame'),
+        ("ingest", "0006_alter_detectedobject_frame"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='frame',
-            name='embedding',
+            model_name="frame",
+            name="embedding",
             field=models.JSONField(blank=True, null=True),
         ),
     ]

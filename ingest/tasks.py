@@ -146,6 +146,7 @@ def generate_embeddings_batch(frame_ids: list[int]):
         frame.save(update_fields=["embedding"])
         try:
             from alerts.engine import evaluate_frame
+
             evaluate_frame(frame)
         except Exception:
             pass

@@ -1,13 +1,12 @@
 from __future__ import annotations
 
 import logging
+
 import numpy as np
-from asgiref.sync import async_to_sync
 from django.core import signals
 
-from ingest.models import DetectedObject
-
 from alerts.models import Alert, AlertRule
+from ingest.models import DetectedObject
 
 logger = logging.getLogger("alerts.engine")
 
@@ -31,7 +30,12 @@ def evaluate_object(obj: DetectedObject):
 
     for rule in AlertRule.objects.filter(active=True):
         logger.info(
-            "Rule %s: label=%s min_conf=%s desc=%s min_sim=%s", rule.id, rule.label, rule.min_confidence, rule.description, rule.min_similarity
+            "Rule %s: label=%s min_conf=%s desc=%s min_sim=%s",
+            rule.id,
+            rule.label,
+            rule.min_confidence,
+            rule.description,
+            rule.min_similarity,
         )
         # Label condition -------------------------------------------------------
         if rule.label and obj.label != rule.label:
@@ -40,7 +44,12 @@ def evaluate_object(obj: DetectedObject):
 
         # Confidence threshold --------------------------------------------------
         if obj.confidence < rule.min_confidence:
-            logger.info("Skip rule %s due to confidence %.2f < %.2f", rule.id, obj.confidence, rule.min_confidence)
+            logger.info(
+                "Skip rule %s due to confidence %.2f < %.2f",
+                rule.id,
+                obj.confidence,
+                rule.min_confidence,
+            )
             continue
 
         # OCR text condition ----------------------------------------------------
@@ -50,20 +59,35 @@ def evaluate_object(obj: DetectedObject):
                 continue
 
         # Embedding similarity --------------------------------------------------
-        if rule.embedding:
+        # Priority: reference images > description embedding fallback
+        if rule.reference_images.exists() or rule.embedding:
             if obj.embedding is None:
                 logger.info("Skip rule %s – object has no embedding", rule.id)
                 continue
-            dist = _cosine_distance(obj.embedding, rule.embedding)
-            similarity = 1 - dist
-            logger.info("Rule %s similarity %.3f", rule.id, similarity)
-            if similarity < (rule.min_similarity / 100):
+
+            similarities = []
+            # Compare with each reference image embedding (if any)
+            for ref in rule.reference_images.all():
+                if ref.embedding:
+                    dist = _cosine_distance(obj.embedding, ref.embedding)
+                    similarities.append(1 - dist)
+
+            # If no reference images or they lacked embedding, fall back to rule.embedding
+            if not similarities and rule.embedding:
+                dist = _cosine_distance(obj.embedding, rule.embedding)
+                similarities.append(1 - dist)
+
+            best_sim = max(similarities) if similarities else 0.0
+            logger.info("Rule %s best similarity %.3f", rule.id, best_sim)
+            if best_sim < (rule.min_similarity / 100):
                 logger.info("Skip rule %s due to similarity threshold", rule.id)
                 continue
 
         # All conditions satisfied → create alert
         alert = Alert.objects.create(rule=rule, frame=obj.frame, detection=obj)
-        logger.info("Created alert %s for rule %s on object %s", alert.id, rule.id, obj.id)
+        logger.info(
+            "Created alert %s for rule %s on object %s", alert.id, rule.id, obj.id
+        )
         _notify_clients(alert)
 
 
@@ -73,11 +97,25 @@ def evaluate_frame(frame):
         return
     logger.info("Evaluating frame %s", frame.id)
     for rule in AlertRule.objects.filter(active=True):
-        if not rule.embedding:
+        if not (rule.reference_images.exists() or rule.embedding):
             continue
-        similarity = 1 - _cosine_distance(frame.embedding, rule.embedding)
-        logger.info("Frame %s rule %s similarity %.3f", frame.id, rule.id, similarity)
-        if similarity < (rule.min_similarity / 100):
+
+        similarities = []
+        # Reference images first
+        for ref in rule.reference_images.all():
+            if ref.embedding:
+                similarities.append(
+                    1 - _cosine_distance(frame.embedding, ref.embedding)
+                )
+
+        if not similarities and rule.embedding:
+            similarities.append(1 - _cosine_distance(frame.embedding, rule.embedding))
+
+        best_sim = max(similarities) if similarities else 0.0
+        logger.info(
+            "Frame %s rule %s best similarity %.3f", frame.id, rule.id, best_sim
+        )
+        if best_sim < (rule.min_similarity / 100):
             continue
         alert = Alert.objects.create(rule=rule, frame=frame, detection=None)
         logger.info("Created frame-level alert %s for rule %s", alert.id, rule.id)
@@ -88,9 +126,9 @@ def evaluate_frame(frame):
 # Very simple server-side push placeholder (polling, SSE, WS later)
 # ---------------------------------------------------------------------------
 
+
 def _notify_clients(alert: Alert):
     """Emit Django signal so listeners (SSE/WS) or tests can react."""
-
-    async_to_sync(signals.request_started.send)(
-        sender=_notify_clients, alert_id=alert.id
-    ) 
+    # Send signal synchronously; wrapping with async_to_sync caused errors when
+    # called inside Celery tasks (returned list incorrectly awaited).
+    signals.request_started.send(sender=_notify_clients, alert_id=alert.id)

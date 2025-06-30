@@ -11,6 +11,7 @@
                 <th>Active</th>
                 <th>Description</th>
                 <th>Similarity %</th>
+                <th>Ref images</th>
                 <th></th>
             </tr>
         </thead>
@@ -22,12 +23,17 @@
                 <td>{{ r.description }}</td>
                 <td>{{ r.min_similarity }}</td>
                 <td>
+                    <a href="{% url 'alert_rule_images' r.pk %}" class="text-decoration-none">
+                        {{ r.reference_images.count }}
+                    </a>
+                </td>
+                <td>
                     <a href="{% url 'alert_rule_edit' r.pk %}" class="btn btn-sm btn-outline-secondary">Edit</a>
                     <a href="{% url 'alert_rule_delete' r.pk %}" class="btn btn-sm btn-outline-danger">Delete</a>
                 </td>
             </tr>
             {% empty %}
-            <tr><td colspan="5">No rules.</td></tr>
+            <tr><td colspan="6">No rules.</td></tr>
             {% endfor %}
         </tbody>
     </table>

@@ -7,4 +7,4 @@ class AlertsConfig(AppConfig):
 
     def ready(self):
         # Import signal handlers
-        import alerts.signals  # noqa 
+        import alerts.signals  # noqa
