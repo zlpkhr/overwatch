@@ -1,0 +1,59 @@
+{% extends 'base.html' %}
+{% block title %}Alerts{% endblock %}
+{% block content %}
+    <h1 class="mb-3">Active Alerts</h1>
+    <div id="alerts-list" class="list-group"></div>
+
+    <script>
+    async function ensurePerm() {
+        if (Notification.permission === "default") {
+            try { await Notification.requestPermission(); } catch(e) {}
+        }
+    }
+
+    function renderAlert(a) {
+        const div = document.createElement("div");
+        div.className = "list-group-item list-group-item-warning d-flex align-items-center gap-3";
+        if (a.image_url) {
+            const img = document.createElement("img");
+            img.src = a.image_url;
+            img.style.width = "80px";
+            img.className = "rounded";
+            div.appendChild(img);
+        }
+        const txt = document.createElement("div");
+        const tsLocal = new Date(a.timestamp).toLocaleString();
+        txt.innerHTML = `<strong>${a.rule_name}</strong><br/><small>${tsLocal}</small>`;
+        div.appendChild(txt);
+        return div;
+    }
+
+    async function getCsrf() {
+        const match = document.cookie.match(/csrftoken=([^;]+)/);
+        return match ? match[1] : null;
+    }
+
+    async function fetchAlerts() {
+        const res = await fetch("/api/alerts/recent/?limit=100");
+        const data = await res.json();
+        const container = document.getElementById("alerts-list");
+        container.innerHTML = "";
+        data.results.forEach(a => {
+            const el = renderAlert(a);
+            container.appendChild(el);
+        });
+    }
+
+    function notify(a) {
+        if (Notification.permission !== "granted") return;
+        const n = new Notification(`Alert: ${a.rule_name}`, {
+            body: `${a.label} @ ${a.timestamp}`,
+            icon: a.image_url || undefined,
+        });
+    }
+
+    ensurePerm();
+    fetchAlerts();
+    setInterval(fetchAlerts, 4000);
+    </script>
+{% endblock %} 

@@ -1,0 +1,33 @@
+{% extends 'base.html' %}
+{% block title %}{% if is_new %}New{% else %}Edit{% endif %} Alert Rule{% endblock %}
+{% block content %}
+    <h1 class="mb-3">{% if is_new %}Create{% else %}Edit{% endif %} Alert Rule</h1>
+    <form method="post">
+        {% csrf_token %}
+        <div class="mb-3">
+            {{ form.name.label_tag }}
+            {{ form.name }}
+        </div>
+        <div class="mb-3 form-check">
+            {{ form.active }} {{ form.active.label_tag }}
+        </div>
+        <div class="mb-3">
+            {{ form.description.label_tag }}
+            {{ form.description }}
+        </div>
+        <div class="mb-3">
+            <label for="id_min_similarity" class="form-label">Match accuracy (<span id="sim-val">{{ form.min_similarity.value|default:form.min_similarity.initial|default:15 }}</span>%)</label>
+            {{ form.min_similarity }}
+        </div>
+        <button type="submit" class="btn btn-success">Save</button>
+        <a href="{% url 'alert_rule_list' %}" class="btn btn-secondary">Cancel</a>
+    </form>
+
+    <script>
+    const slider = document.getElementById('id_min_similarity');
+    const lbl = document.getElementById('sim-val');
+    if (slider) {
+        slider.addEventListener('input', () => lbl.textContent = slider.value);
+    }
+    </script>
+{% endblock %} 

@@ -25,6 +25,7 @@ urlpatterns = [
     path("", include("search.urls")),
     # Live streaming endpoints
     path("", include("stream.urls")),
+    path("", include("alerts.urls")),  # NEW alerts endpoints
 ]
 
 if settings.DEBUG:

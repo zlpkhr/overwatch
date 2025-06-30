@@ -112,12 +112,22 @@ def extract_objects_and_save(frame: Frame):
 def generate_embeddings(frame_id: int):
     frame = Frame.objects.get(id=frame_id)
     embeddings = embed_frame(frame.image.read())
+    # save embedding to frame
+    frame.embedding = embeddings
+    frame.save(update_fields=["embedding"])
     collection = ChromaService.get_collection()
     collection.upsert(
         embeddings=[embeddings],
         ids=[str(frame.id)],
         metadatas=[{"timestamp": str(frame.timestamp)}],
     )
+    # evaluate alert rules based on frame embedding
+    try:
+        from alerts.engine import evaluate_frame
+
+        evaluate_frame(frame)
+    except Exception:
+        pass
 
 
 @shared_task
@@ -132,6 +142,13 @@ def generate_embeddings_batch(frame_ids: list[int]):
             ids=[str(frame.id)],
             metadatas=[{"timestamp": str(frame.timestamp)}],
         )
+        frame.embedding = embedding
+        frame.save(update_fields=["embedding"])
+        try:
+            from alerts.engine import evaluate_frame
+            evaluate_frame(frame)
+        except Exception:
+            pass
 
 
 # Object detection/OCR task ---------------------------------------------------

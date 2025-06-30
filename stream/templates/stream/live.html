@@ -1,115 +1,59 @@
-<!DOCTYPE html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>CCTV Live Stream</title>
-    <link
-      href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
-      rel="stylesheet"
-    />
-    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
-    <style>
-      #video-container {
-        margin-bottom: 2rem;
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-        border-radius: 8px;
-        overflow: hidden;
+{% extends 'base.html' %}
+{% block title %}CCTV Live Stream{% endblock %}
+{% block content %}
+<div class="container py-5">
+  <div class="text-center mb-4">
+    <h1>CCTV Live Stream</h1>
+  </div>
+  <div id="video-container" class="shadow rounded mb-4">
+    <video id="live-video" controls autoplay muted style="width:100%;background:#000;"></video>
+  </div>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  const urlParams = new URLSearchParams(window.location.search);
+  const slug = urlParams.get("slug") || "live";
+  const tsParam = urlParams.get("ts");
+  const video = document.getElementById("live-video");
+
+  fetch(`/get_hls_url/?slug=${slug}`)
+    .then((r) => r.json())
+    .then((data) => {
+      if (!data.hls_url) return;
+      const hlsUrl = data.hls_url;
+      if (Hls.isSupported()) {
+        const hls = new Hls({ lowLatencyMode: true, backBufferLength: 90 });
+        hls.loadSource(hlsUrl);
+        hls.attachMedia(video);
+        hls.on(Hls.Events.MANIFEST_PARSED, () => video.play());
+        if (tsParam) {
+          const tsMs = Date.parse(tsParam);
+          hls.on(Hls.Events.LEVEL_LOADED, (_, d) => {
+            const frags = d.details.fragments;
+            if (!frags.length || !frags[0].programDateTime) return;
+            const firstMs = frags[0].programDateTime.getTime();
+            const offset = (tsMs - firstMs) / 1000;
+            if (offset > 0 && offset < video.duration) video.currentTime = offset;
+          });
+        }
+        hls.on(Hls.Events.ERROR, (_, d) => {
+          if (!d.fatal) return;
+          if (d.type === Hls.ErrorTypes.NETWORK_ERROR) hls.startLoad();
+          else if (d.type === Hls.ErrorTypes.MEDIA_ERROR) hls.recoverMediaError();
+          else hls.destroy();
+        });
+      } else if (video.canPlayType("application/vnd.apple.mpegurl")) {
+        video.src = hlsUrl;
+        video.addEventListener("loadedmetadata", () => video.play());
       }
-      #live-video {
-        width: 100%;
-        height: auto;
-        background-color: #000;
+      if (tsParam) {
+        const info = document.createElement("div");
+        info.className = "alert alert-info mt-3";
+        info.innerText = `Selected frame timestamp: ${new Date(tsParam).toLocaleString()}`;
+        document.querySelector(".container").appendChild(info);
       }
-    </style>
-  </head>
-  <body>
-    <div class="container py-5">
-      <div class="text-center mb-4">
-        <h1>CCTV Live Stream</h1>
-      </div>
-      <div id="video-container">
-        <video id="live-video" controls autoplay muted></video>
-      </div>
-    </div>
-    <script>
-      document.addEventListener("DOMContentLoaded", function () {
-        const urlParams = new URLSearchParams(window.location.search);
-        const slug = urlParams.get("slug") || "live";
-        const tsParam = urlParams.get("ts");
-        const video = document.getElementById("live-video");
-
-        fetch(`/get_hls_url/?slug=${slug}`)
-          .then((response) => response.json())
-          .then((data) => {
-            if (!data.hls_url) {
-              console.error("No HLS URL returned", data);
-              return;
-            }
-            const hlsUrl = data.hls_url;
-
-            if (Hls.isSupported()) {
-              const hls = new Hls({
-                lowLatencyMode: true,
-                backBufferLength: 90,
-              });
-              hls.loadSource(hlsUrl);
-              hls.attachMedia(video);
-              hls.on(Hls.Events.MANIFEST_PARSED, function () {
-                video.play();
-              });
-
-              if (tsParam) {
-                const tsMs = Date.parse(tsParam);
-                hls.on(Hls.Events.LEVEL_LOADED, function (event, data) {
-                  const frags = data.details.fragments;
-                  if (!frags.length || !frags[0].programDateTime) return;
-
-                  const firstMs = frags[0].programDateTime.getTime();
-                  const offsetSec = (tsMs - firstMs) / 1000;
-                  if (offsetSec > 0 && offsetSec < video.duration) {
-                    video.currentTime = offsetSec;
-                  }
-                });
-              }
-
-              // Automatic recovery on fatal errors
-              hls.on(Hls.Events.ERROR, function (event, data) {
-                if (data.fatal) {
-                  switch (data.type) {
-                    case Hls.ErrorTypes.NETWORK_ERROR:
-                      console.warn("Network error, attempting recovery...");
-                      hls.startLoad();
-                      break;
-                    case Hls.ErrorTypes.MEDIA_ERROR:
-                      console.warn("Media error, attempting recovery...");
-                      hls.recoverMediaError();
-                      break;
-                    default:
-                      hls.destroy();
-                      break;
-                  }
-                }
-              });
-            } else if (video.canPlayType("application/vnd.apple.mpegurl")) {
-              // Native HLS support (Safari, iOS)
-              video.src = hlsUrl;
-              video.addEventListener("loadedmetadata", function () {
-                video.play();
-              });
-            } else {
-              console.error("HLS not supported in this browser");
-            }
-
-            if (tsParam) {
-              const info = document.createElement('div');
-              info.className = 'alert alert-info mt-3';
-              info.innerText = `Selected frame timestamp: ${new Date(tsParam).toLocaleString()}`;
-              document.querySelector('.container').appendChild(info);
-            }
-          })
-          .catch((err) => console.error("Failed to fetch HLS URL", err));
-      });
-    </script>
-  </body>
-</html> 
+    });
+});
+</script>
+{% endblock %} 
