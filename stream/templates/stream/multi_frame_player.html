@@ -1,0 +1,83 @@
+{% extends 'base.html' %}
+{% block title %}Multi-frame Player{% endblock %}
+{% block content %}
+<h1 class="text-center mb-3">Synchronized Playback</h1>
+<div id="frames-row" class="row row-cols-1 row-cols-sm-2 row-cols-md-3 g-3 mb-4">
+  <!-- Filled by JS -->
+</div>
+<div class="d-flex justify-content-between">
+  <button id="prev-btn" class="btn btn-secondary">&laquo; Prev</button>
+  <div id="timestamp-display" class="align-self-center fw-bold"></div>
+  <button id="next-btn" class="btn btn-secondary">Next &raquo;</button>
+</div>
+
+<script>
+const cameras = {{ cameras_json|default:'null'|safe }}; // placeholder (not used yet)
+let currentTs = new Date().toISOString();
+const row = document.getElementById('frames-row');
+const tsDisplay = document.getElementById('timestamp-display');
+
+function renderFrames(group){
+  row.innerHTML='';
+  tsDisplay.textContent=new Date(group.sync_key).toLocaleString();
+  const cams = Object.keys(group.frames);
+  cams.forEach(slug=>{
+    const data = group.frames[slug];
+    const col=document.createElement('div');
+    col.className='col';
+    const card=document.createElement('div');
+    card.className='card bg-dark text-white shadow-sm';
+    const header=document.createElement('div');
+    header.className='card-header p-2';
+    header.textContent=slug;
+    const body=document.createElement('div');
+    body.className='ratio ratio-16x9 position-relative';
+    if(data){
+      const img=document.createElement('img');
+      img.src=data.image_url;
+      img.className='w-100 h-100';
+      img.style.objectFit='contain';
+      body.appendChild(img);
+    }else{
+      const placeholder=document.createElement('div');
+      placeholder.className='d-flex flex-column justify-content-center align-items-center text-center position-absolute top-0 bottom-0 start-0 end-0';
+      placeholder.style.background='#000';
+      placeholder.innerHTML='<span class="text-danger fw-bold">NO&nbsp;SIGNAL</span>';
+      body.appendChild(placeholder);
+    }
+    card.appendChild(header);
+    card.appendChild(body);
+    col.appendChild(card);
+    row.appendChild(col);
+  });
+}
+
+async function fetchAndRender(ts){
+  try{
+    const res=await fetch(`/frames/sequence/sync/?after=${encodeURIComponent(ts)}&count=1`);
+    if(!res.ok) throw new Error('Server error');
+    const data=await res.json();
+    if(!data.results.length) return;
+    const group=data.results[0];
+    currentTs=group.sync_key;
+    renderFrames(group);
+  }catch(e){console.error(e);}
+}
+
+document.getElementById('prev-btn').addEventListener('click',()=>{
+  const dt=new Date(currentTs);
+  dt.setSeconds(dt.getSeconds()-1);
+  fetchAndRender(dt.toISOString());
+});
+
+document.getElementById('next-btn').addEventListener('click',()=>{
+  const dt=new Date(currentTs);
+  dt.setSeconds(dt.getSeconds()+1);
+  fetchAndRender(dt.toISOString());
+});
+
+document.addEventListener('DOMContentLoaded',()=>{
+  fetchAndRender(currentTs);
+});
+</script>
+{% endblock %}
