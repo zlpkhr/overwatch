@@ -25,6 +25,8 @@ urlpatterns = [
     path("", include("search.urls")),
     # Live streaming endpoints
     path("", include("stream.urls")),
+    # Streams management (Camera CRUD)
+    path("", include("ingest.urls")),
     path("", include("alerts.urls")),  # NEW alerts endpoints
 ]
 

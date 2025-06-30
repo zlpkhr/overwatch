@@ -17,72 +17,44 @@ FFMPEG_BIN = os.getenv("FFMPEG_BIN", "ffmpeg")
 
 
 class Command(BaseCommand):
-    """Restream one (or all) Cameras as HLS under MEDIA_ROOT/hls/<slug>/.
+    """Restream all active Cameras as HLS under MEDIA_ROOT/hls/<slug>/."""
 
-    Usage:
-        python manage.py restream_hls --slug=<camera-slug>
-        python manage.py restream_hls               # restream *all* cameras
-
-    The command will spawn a long-running FFmpeg process per camera.
-    We *do not* daemonise – use a process manager (systemd / supervisord) or
-    Docker to keep this running in production.
-    """
-
-    help = "Restream RTSP cameras to HLS using FFmpeg"
-
-    def add_arguments(self, parser):
-        parser.add_argument(
-            "--slug",
-            type=str,
-            default="live",
-            help="Slug to use for the HLS output directory (default: 'live')",
-        )
-        parser.add_argument(
-            "--rtsp",
-            type=str,
-            help="Optional RTSP URL to restream (overrides settings.RTSP_URL)",
-        )
-        parser.add_argument(
-            "--segment-time",
-            type=int,
-            default=1,
-            help="HLS segment duration in seconds (default: 1)",
-        )
-        parser.add_argument(
-            "--list-size",
-            type=int,
-            default=5,
-            help="Number of segments to keep in playlist (use 0 for unlimited). Default: 5",
-        )
+    help = "Restream every active camera. No arguments."
 
     def handle(self, *args, **options):
-        slug = options.get("slug", "live")
-        rtsp_url = options.get("rtsp")
-        if not rtsp_url:
-            # Try to resolve from Camera model using slug
-            try:
-                cam = Camera.objects.get(slug=slug)
-                rtsp_url = cam.rtsp_url
-            except Camera.DoesNotExist:
-                rtsp_url = None
+        cameras = Camera.objects.filter(is_active=True)
 
-        rtsp_url = rtsp_url or settings.RTSP_URL
-        segment_time = int(
-            options.get("segment_time") or options.get("segment-time") or 1
-        )
-        list_size = int(options.get("list_size") or options.get("list-size") or 5)
+        # Auto-create default camera if DB empty and settings.RTSP_URL present
+        if not cameras.exists():
+            default_url = getattr(settings, "RTSP_URL", None)
+            if default_url:
+                cam = Camera.objects.create(
+                    name="Default Camera",
+                    slug="overwatch",
+                    rtsp_url=default_url,
+                    is_active=True,
+                )
+                cameras = Camera.objects.filter(pk=cam.pk)
+            else:
+                raise CommandError("No cameras configured and settings.RTSP_URL missing.")
 
-        if not rtsp_url:
-            raise CommandError(
-                "RTSP URL must be provided via --rtsp or settings.RTSP_URL"
+        # HLS params (hard-coded defaults)
+        segment_time = 1
+        list_size = 5
+
+        self._procs = []
+
+        for cam in cameras:
+            self.stdout.write(
+                self.style.NOTICE(f"Restreaming camera '{cam.slug}' -> {cam.rtsp_url}")
             )
+            self._spawn_ffmpeg(cam.slug, cam.rtsp_url, segment_time, list_size)
 
-        self.stdout.write(self.style.NOTICE(f"Starting HLS restream (slug '{slug}')"))
-        self._spawn_ffmpeg(slug, rtsp_url, segment_time, list_size)
-
-        # Keep process alive (Ctrl+C to exit)
+        # Wait for all processes
         try:
-            self.stdout.write(self.style.SUCCESS("Restreaming – press Ctrl+C to stop"))
+            self.stdout.write(
+                self.style.SUCCESS("Restreaming – press Ctrl+C to stop")
+            )
             for proc in self._procs:
                 proc.wait()
         except KeyboardInterrupt:

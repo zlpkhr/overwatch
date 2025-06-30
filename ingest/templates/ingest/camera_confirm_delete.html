@@ -1,0 +1,11 @@
+{% extends 'base.html' %}
+{% block title %}Delete Stream{% endblock %}
+{% block content %}
+<h1 class="mb-4">Delete Stream</h1>
+<p>Are you sure you want to delete stream <strong>{{ object.name }}</strong>?</p>
+<form method="post">
+  {% csrf_token %}
+  <button type="submit" class="btn btn-danger">Delete</button>
+  <a href="{% url 'camera_list' %}" class="btn btn-secondary">Cancel</a>
+</form>
+{% endblock %} 

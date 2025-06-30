@@ -1,0 +1,33 @@
+{% extends 'base.html' %}
+{% block title %}Manage Streams{% endblock %}
+{% block content %}
+<h1 class="mb-4">Streams</h1>
+<a href="{% url 'camera_add' %}" class="btn btn-primary mb-3">Add Stream</a>
+<table class="table table-striped">
+  <thead>
+    <tr>
+      <th>Name</th>
+      <th>Slug</th>
+      <th>RTSP URL</th>
+      <th>Active</th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for cam in cameras %}
+    <tr>
+      <td>{{ cam.name }}</td>
+      <td>{{ cam.slug }}</td>
+      <td class="text-truncate" style="max-width:250px;">{{ cam.rtsp_url }}</td>
+      <td>{% if cam.is_active %}✔{% else %}✖{% endif %}</td>
+      <td class="text-end">
+        <a href="{% url 'camera_edit' cam.slug %}" class="btn btn-sm btn-secondary">Edit</a>
+        <a href="{% url 'camera_delete' cam.slug %}" class="btn btn-sm btn-danger">Delete</a>
+      </td>
+    </tr>
+    {% empty %}
+    <tr><td colspan="5" class="text-center">No streams configured.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %} 

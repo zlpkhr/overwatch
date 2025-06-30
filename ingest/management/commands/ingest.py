@@ -1,4 +1,6 @@
 import time
+import subprocess
+import sys
 from datetime import datetime
 
 import cv2
@@ -14,14 +16,17 @@ BATCH_SIZE = 8
 
 
 class Command(BaseCommand):
-    help = "Connects to an RTSP stream, extracts frames at 1 FPS, and saves them using Django's storage system."
+    help = (
+        "Ingest frames from CCTV cameras.\n"
+        " • With no arguments: spawns a worker for every active camera.\n"
+        " • Internal use: --slug=<camera> to run a single-camera worker."
+    )
 
     def add_arguments(self, parser):
         parser.add_argument(
             "--slug",
             type=str,
-            default="default",
-            help="Camera slug to ingest (default: 'default')",
+            help="Camera slug to ingest. If omitted, ingest all active cameras.",
         )
         parser.add_argument(
             "--rtsp",
@@ -34,13 +39,38 @@ class Command(BaseCommand):
         # Retrieve camera information
         # ------------------------------------------------------------------
 
-        slug = options.get("slug", "default")
-        rtsp_override = options.get("rtsp")
+        slug = options.get("slug")
 
+        # If no slug – spawn subprocesses for all cameras
+        if not slug:
+            cameras = list(Camera.objects.filter(is_active=True))
+            if not cameras:
+                self.stdout.write(self.style.ERROR("No active cameras found."))
+                return
+
+            procs: list[subprocess.Popen] = []
+            try:
+                for cam in cameras:
+                    cmd = [sys.executable, "manage.py", "ingest", f"--slug={cam.slug}"]
+                    self.stdout.write(self.style.NOTICE(f"Launching ingest for camera '{cam.slug}'"))
+                    procs.append(subprocess.Popen(cmd))
+
+                self.stdout.write(self.style.SUCCESS("Ingestion processes started – press Ctrl+C to stop"))
+                for p in procs:
+                    p.wait()
+            except KeyboardInterrupt:
+                self.stdout.write(self.style.WARNING("Interrupted – terminating workers"))
+                for p in procs:
+                    p.terminate()
+            return
+
+        # Single camera path
         try:
             camera = Camera.objects.get(slug=slug)
         except Camera.DoesNotExist:
             raise CommandError(f"Camera with slug '{slug}' does not exist.")
+
+        rtsp_override = options.get("rtsp")
 
         rtsp_url = rtsp_override or camera.rtsp_url or getattr(settings, "RTSP_URL", None)
 
