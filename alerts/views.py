@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from django.http import HttpResponseRedirect, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
