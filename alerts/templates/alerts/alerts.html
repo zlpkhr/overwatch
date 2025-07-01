@@ -24,7 +24,7 @@
         }
         const txt = document.createElement("div");
         const tsLocal = new Date(a.timestamp).toLocaleString();
-        txt.innerHTML = `<strong>${a.rule_name}</strong><br/><small>${tsLocal}</small>`;
+        txt.innerHTML = `<strong>${a.rule_name}</strong> <span class='badge bg-primary'>Cam ${a.camera_id || '?'}</span><br/><small>${tsLocal}</small>`;
         div.appendChild(txt);
         return div;
     }

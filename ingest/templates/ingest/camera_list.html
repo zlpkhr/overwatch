@@ -1,0 +1,33 @@
+{% extends 'base.html' %}
+{% block title %}Cameras{% endblock %}
+{% block content %}
+<div class="container py-5">
+  <h1 class="mb-4">Cameras</h1>
+  <a href="{% url 'camera_add' %}" class="btn btn-primary mb-3">Add Camera</a>
+  <table class="table table-bordered table-striped">
+    <thead>
+      <tr>
+        <th>ID</th>
+        <th>RTSP URL</th>
+        <th>Created</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for camera in object_list %}
+      <tr>
+        <td>{{ camera.id }}</td>
+        <td><code>{{ camera.rtsp_url }}</code></td>
+        <td>{{ camera.created_at|date:"Y-m-d H:i" }}</td>
+        <td>
+          <a href="{% url 'camera_edit' camera.id %}" class="btn btn-sm btn-outline-secondary">Edit</a>
+          <a href="{% url 'camera_delete' camera.id %}" class="btn btn-sm btn-outline-danger">Delete</a>
+        </td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="4" class="text-center">No cameras configured.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %} 

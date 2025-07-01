@@ -229,6 +229,7 @@ def compose_response(
         score = calculate_score(dist, min_dist, max_dist)
         result = {
             "id": frame.id,
+            "camera_id": frame.camera_id,
             "image_url": image_url,
             "timestamp": frame.timestamp.isoformat(),
             "score": score,  # normalized chroma distance (higher is better)
@@ -391,6 +392,7 @@ def search_timestamps(request):
         response_data.append(
             {
                 "id": frame.id,
+                "camera_id": frame.camera_id,
                 "timestamp": frame.timestamp.isoformat(),
                 "distance": dist,
                 "image_url": image_url,

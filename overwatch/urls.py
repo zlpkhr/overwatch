@@ -26,6 +26,7 @@ urlpatterns = [
     # Live streaming endpoints
     path("", include("stream.urls")),
     path("", include("alerts.urls")),  # NEW alerts endpoints
+    path("", include("ingest.urls")),  # cameras CRUD and API
 ]
 
 if settings.DEBUG:

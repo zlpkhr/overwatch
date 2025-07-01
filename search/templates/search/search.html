@@ -39,77 +39,23 @@ $(function() {
                     $('#results').html('<div class="alert alert-warning">No results found.</div>');
                     return;
                 }
-                let html = '';
-                results.forEach(function(res) {
-                    html += `
-                    <div class="col result-card">
-                        <div class="card h-100" id="card-${res.id}">
-                            <div class="img-wrapper position-relative">
-                                ${res.image_url ? `<img src="${res.image_url}" class="card-img-top frame-img" alt="Frame" data-frame="${res.id}">` : ''}
-                            </div>
-                            <div class="card-body">
-                                <h5 class="card-title">Frame ${res.id}</h5>
-                                <p class="card-text"><strong>${new Date(res.timestamp).toLocaleString()}</strong></p>
-                                <p class="card-text small text-muted">Score: ${res.score.toFixed(3)}${res.rerank_score !== undefined ? ', Re-rank: ' + res.rerank_score.toFixed(3) : ''}</p>
-                                <div class="detections small text-muted"><em>Loading detections...</em></div>
-                            </div>
-                        </div>
-                    </div>`;
-                });
-                $('#results').html(html);
+                $('#results').html(''); // no grid card view
 
-                let tHtml = '';
-                results.forEach(function(res){
-                    tHtml += `<div class="position-relative timeline-item" style="cursor:pointer;" data-timestamp="${res.timestamp}" id="card-${res.id}">
-                                <div class="img-wrapper position-relative d-inline-block">
-                                   ${res.image_url ? `<img src="${res.image_url}" alt="Frame" style="height:320px;border-radius:6px;" class="thumb-img"/>` : ''}
-                                   <span class="badge bg-dark position-absolute top-0 start-0">${new Date(res.timestamp).toLocaleTimeString()}</span>
-                                </div>
-                              </div>`;
-                });
-                $('#timeline').html(tHtml);
-
-                results.forEach(function(res) {
-                    $.getJSON(`/search/frame/${res.id}/detections/`, function(data) {
-                        const card = $(`#card-${res.id}`);
-                        const wrapper = card.find('.img-wrapper');
-                        const img = card.find('img.thumb-img');
-                        const dets = data.detections || [];
-
-                        let tooltipText = `Frame ${res.id}\n${new Date(res.timestamp).toLocaleString()}\nScore: ${res.score.toFixed(3)}${res.rerank_score!==undefined? ', R: '+res.rerank_score.toFixed(3):''}\n`;
-                        if(dets.length){
-                           tooltipText += dets.map(d=>`${d.label} (${d.confidence.toFixed(2)})${d.text?' - '+d.text:''}`).join(', ');
-                        }
-                        card.attr('data-bs-toggle','tooltip').attr('data-bs-title',tooltipText);
-
-                        function renderBoxes(){
-                            const w = img[0].naturalWidth;
-                            const h = img[0].naturalHeight;
-                            if(!w || !h){
-                                img.on('load', renderBoxes);
-                                return;
-                            }
-                            const SCALE = 320 / h;
-                            dets.forEach(function(d){
-                                const [x1,y1,x2,y2]=d.bbox;
-                                const box=$('<div class="det-box"></div>');
-                                box.css({
-                                    position:'absolute',
-                                    left:x1*w*SCALE+'px',
-                                    top:y1*h*SCALE+'px',
-                                    width:(x2-x1)*w*SCALE+'px',
-                                    height:(y2-y1)*h*SCALE+'px',
-                                    border:'2px solid #f00',
-                                    'pointer-events':'none'
-                                });
-                                wrapper.append(box);
-                            });
-                        }
-                        renderBoxes();
+                const groups = {};
+                results.forEach(r=>{groups[r.camera_id]=groups[r.camera_id]||[];groups[r.camera_id].push(r);});
+                const timeline=$('#timeline');timeline.empty();
+                Object.keys(groups).sort((a,b)=>a-b).forEach(camId=>{
+                    const row=$(`<div class='d-flex align-items-center mb-3 gap-2 flex-nowrap'></div>`);
+                    row.append(`<span class='me-2 fw-bold'>Cam ${camId}</span>`);
+                    groups[camId].forEach(res=>{
+                        row.append(`<div class="position-relative timeline-item" style="cursor:pointer;" data-timestamp="${res.timestamp}" id="card-${res.id}">
+                                        <div class="img-wrapper position-relative d-inline-block">
+                                           ${res.image_url ? `<img src="${res.image_url}" alt="Frame" style="height:160px;border-radius:4px;" class="thumb-img"/>` : ''}
+                                        </div>
+                                      </div>`);
                     });
+                    timeline.append(row);
                 });
-                const tooltipTriggerList=[].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
-                tooltipTriggerList.map(t=>new bootstrap.Tooltip(t));
             },
             error:function(xhr){
                 $('#results').html('<div class="alert alert-danger">Error: '+(xhr.responseJSON?.error||'Failed to fetch results')+'</div>');

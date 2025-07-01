@@ -6,6 +6,7 @@ from stream.views import (
     get_hls_url,
     latest_frame,
     live_stream,
+    sync_frames,
 )
 
 urlpatterns = [
@@ -14,4 +15,5 @@ urlpatterns = [
     path("frames/play/", frame_player, name="frame_player"),
     path("frames/sequence/", frame_sequence, name="frame_sequence"),
     path("frames/latest/", latest_frame, name="latest_frame"),
+    path("frames/sync/", sync_frames, name="frame_sync"),
 ]

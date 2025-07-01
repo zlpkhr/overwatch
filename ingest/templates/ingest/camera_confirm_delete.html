@@ -1,0 +1,13 @@
+{% extends 'base.html' %}
+{% block title %}Delete Camera{% endblock %}
+{% block content %}
+<div class="container py-5">
+  <h1 class="mb-4">Delete Camera {{ object.id }}?</h1>
+  <p>RTSP URL: <code>{{ object.rtsp_url }}</code></p>
+  <form method="post">
+    {% csrf_token %}
+    <button type="submit" class="btn btn-danger">Confirm Delete</button>
+    <a href="{% url 'camera_list' %}" class="btn btn-secondary">Cancel</a>
+  </form>
+</div>
+{% endblock %} 

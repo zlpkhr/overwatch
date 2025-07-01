@@ -38,6 +38,7 @@ def unacked_alerts(request):
                 "label": getattr(a.detection, "label", ""),
                 "image_url": image_url,
                 "frame_id": a.frame.id if a.frame else None,
+                "camera_id": a.frame.camera_id if a.frame else None,
                 "frame_player_url": player_url,
             }
         )
@@ -92,6 +93,7 @@ def recent_alerts(request):
                 "label": getattr(a.detection, "label", ""),
                 "image_url": image_url,
                 "frame_id": a.frame.id if a.frame else None,
+                "camera_id": a.frame.camera_id if a.frame else None,
                 "frame_player_url": player_url,
                 "acknowledged": a.acknowledged,
             }

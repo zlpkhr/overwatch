@@ -3,10 +3,7 @@
 {% block content %}
 <div class="container py-5 text-center">
   <h1 class="mb-4">Frame Player</h1>
-  <div style="position:relative;display:inline-block;">
-     <img id="frame-img" src="" alt="Frame" style="max-width:100%;height:auto;border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,.15);background:#000;"/>
-     <div id="overlay" style="position:absolute;top:0;left:0;pointer-events:none;"></div>
-  </div>
+  <div id="frame-grid" class="row g-4"></div>
   <div class="mt-3">
     <button id="btn-prev" class="btn btn-outline-primary me-2">Previous</button>
     <button id="btn-next" class="btn btn-outline-primary me-2">Next</button>
@@ -30,50 +27,84 @@ $(function(){
   const tsLabel=$('#timestamp');
   const history=[];
   let pointer=-1;
-  function fetchBatch(cb){
-    $.getJSON('/frames/sequence/',{after:nextAfter,count:60}).done(d=>{
-      const newFrames=d.results||[];
-      if(newFrames.length){history.push(...newFrames);nextAfter=d.next_after||nextAfter;}
-      if(typeof cb==='function')cb(newFrames);
+  let camOrder=[];
+
+  // fetch camera list once
+  $.getJSON('/api/cameras/',d=>{camOrder=d.cameras.map(c=>String(c.id));});
+
+  function renderGrid(data){
+    const grid=$('#frame-grid');grid.empty();
+    const frames=data.frames||{};
+    const order=camOrder.length?camOrder:Object.keys(frames).sort((a,b)=>a-b);
+    order.forEach(camId=>{
+       const f=frames[camId];
+       const col=$('<div class="col-12 col-md-6 position-relative"></div>');
+       if(f){
+           const imgId=`img-${camId}`;
+           col.append(`<div class='position-relative'>
+               <img id='${imgId}' src='${f.image_url||''}' alt='Frame' class='img-fluid rounded shadow'/>
+               <div class='overlay-boxes position-absolute top-0 start-0 w-100 h-100'></div>
+           </div>`);
+           // fetch detections and draw boxes once image is loaded
+           $.getJSON(`/search/frame/${f.id}/detections/`,data=>{
+               const dets=data.detections||[];
+               const imgEl=$(`#${imgId}`)[0];
+               const draw=()=>{
+                   const w=imgEl.naturalWidth,h=imgEl.naturalHeight;
+                   if(!w||!h){setTimeout(draw,50);return;}
+                   const scale=imgEl.clientWidth/w;
+                   const overlay=$(imgEl).siblings('.overlay-boxes');
+                   overlay.empty();
+                   dets.forEach(d=>{
+                       const [x1,y1,x2,y2]=d.bbox;
+                       const box=$('<div class="position-absolute border border-danger"></div>');
+                       box.css({
+                           left:x1*w*scale,
+                           top:y1*h*scale,
+                           width:(x2-x1)*w*scale,
+                           height:(y2-y1)*h*scale,
+                           borderWidth:'2px'
+                       });
+                       overlay.append(box);
+                   });
+               };
+               draw();
+           });
+       }else{
+           col.append(`<div class='d-flex align-items-center justify-content-center border rounded shadow bg-light' style='height:100%;min-height:200px;'><span class='text-muted'>No frame</span></div>`);
+       }
+       col.append(`<span class='badge bg-dark position-absolute top-0 start-0 m-1'>Cam ${camId}</span>`);
+       grid.append(col);
     });
+    // simple placeholder detection: if only one cam returned but we expect 2+, leave blank slots
+    tsLabel.text(new Date(data.timestamp).toLocaleString());
   }
-  function drawBoxes(frameId){
-    overlay.empty();
-    $.getJSON(`/search/frame/${frameId}/detections/`,function(data){
-      const dets=data.detections||[];
-      const w=imgEl[0].naturalWidth;const h=imgEl[0].naturalHeight;
-      const scale=imgEl.width()/w;
-      dets.forEach(d=>{
-        const [x1,y1,x2,y2]=d.bbox;
-        const box=$('<div class="border border-danger position-absolute text-white small px-1"></div>').text(d.label);
-        box.css({left:x1*w*scale,top:y1*h*scale,width:(x2-x1)*w*scale,height:(y2-y1)*h*scale,borderWidth:'2px',overflow:'hidden'});
-        overlay.append(box);
-      });
-    });
+  function fetchAndRender(ts,direction=1,attempt=0){
+     $.getJSON('/frames/sync/',{ts:ts,tol:2}).done(d=>{
+        if(Object.keys(d.frames||{}).length===0 && attempt<20){
+            // no frames at this second – step in the same direction until we find some
+            const nextTs=new Date(new Date(ts).getTime()+direction*1000).toISOString();
+            fetchAndRender(nextTs,direction,attempt+1);
+            return;
+        }
+        currentTs=d.timestamp||ts;
+        renderGrid(d);
+     });
   }
-  function showFrame(frame){
-    imgEl.attr('src',frame.image_url||'');
-    tsLabel.text(new Date(frame.timestamp).toLocaleString());
-    drawBoxes(frame.id);
+  function advance(step){
+     const newTs=new Date(new Date(currentTs).getTime()+step*1000).toISOString();
+     fetchAndRender(newTs,step>0?1:-1);
   }
-  function advance(){
-    if(!playing)return;
-    if(pointer+1<history.length){pointer++;showFrame(history[pointer]);return;}
-    fetchBatch(()=>{if(history.length>pointer+1){pointer++;showFrame(history[pointer]);}});
-  }
-  setInterval(()=>advance(),1000);
-  // initial fetch
-  $.getJSON('/frames/sequence/',{after:ts,count:1,inc:1}).done(d=>{
-    const first=d.results||[];
-    if(first.length){history.push(first[0]);pointer=0;nextAfter=d.next_after||nextAfter;showFrame(history[0]);}
-    fetchBatch();
-  });
+  setInterval(()=>{if(playing)advance(1);},1000);
+  // initial
+  let currentTs=ts;
+  fetchAndRender(ts,1);
   function updateToggle(){const btn=$('#btn-toggle');btn.toggleClass('btn-danger',playing).toggleClass('btn-success',!playing).text(playing?'Pause':'Play');}
   $('#btn-toggle').on('click',()=>{playing=!playing;updateToggle();});
-  $('#btn-next').on('click',()=>{playing=false;updateToggle();if(pointer+1<history.length){pointer++;showFrame(history[pointer]);}else{fetchBatch(()=>{if(pointer+1<history.length){pointer++;showFrame(history[pointer]);}});}});
-  $('#btn-prev').on('click',()=>{playing=false;updateToggle();if(pointer>0){pointer--;showFrame(history[pointer]);}else{const firstTs=history[0]?.timestamp;if(!firstTs)return;$.getJSON('/frames/sequence/',{before:firstTs,count:60}).done(d=>{const older=d.results||[];if(older.length){history.unshift(...older);pointer+=older.length-1;showFrame(history[pointer]);}});}});
-  $('#btn-reset').on('click',()=>{playing=false;updateToggle();pointer=0;showFrame(history[0]);});
-  $('#btn-latest').on('click',()=>{$.getJSON('/frames/latest/',d=>{nextAfter=d.timestamp;history.push(d);pointer=history.length-1;showFrame(d);});});
+  $('#btn-next').on('click',()=>{playing=false;updateToggle();advance(1);});
+  $('#btn-prev').on('click',()=>{playing=false;updateToggle();advance(-1);});
+  $('#btn-reset').on('click',()=>{playing=false;updateToggle();currentTs=ts;fetchAndRender(currentTs);});
+  $('#btn-latest').on('click',()=>{$.getJSON('/frames/latest/',d=>{currentTs=d.timestamp;fetchAndRender(currentTs);});});
 });
 </script>
 {% endblock %} 

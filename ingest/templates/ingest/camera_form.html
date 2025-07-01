@@ -1,0 +1,13 @@
+{% extends 'base.html' %}
+{% block title %}{{ view.object|default:'New' }} Camera{% endblock %}
+{% block content %}
+<div class="container py-5">
+  <h1 class="mb-4">{{ view.object.pk|yesno:'Edit Camera,Add Camera' }}</h1>
+  <form method="post">
+    {% csrf_token %}
+    {{ form.as_p }}
+    <button type="submit" class="btn btn-success">Save</button>
+    <a href="{% url 'camera_list' %}" class="btn btn-secondary">Back</a>
+  </form>
+</div>
+{% endblock %} 

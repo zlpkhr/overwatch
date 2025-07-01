@@ -1,11 +1,11 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from django.conf import settings
 from django.http import JsonResponse
 from django.shortcuts import render
 from django.views.decorators.http import require_GET
 
-from ingest.models import Frame
+from ingest.models import Frame, Camera
 
 # Create your views here.
 
@@ -15,16 +15,36 @@ def live_stream(request):
     return render(request, "stream/live.html")
 
 
-def get_hls_url(request):
-    """Return absolute URL for the HLS master playlist as JSON.
+# ---------------------------------------------------------------------------
+# HLS playlist helpers
+# ---------------------------------------------------------------------------
 
-    Optional `slug` query-param allows choosing a different output directory.
-    Default: 'live'.
+
+def get_hls_url(request):
+    """Return HLS URL(s) for one or all cameras as JSON.
+
+    Query params:
+        camera  – (int) camera id. If omitted, returns mapping of every camera.
     """
-    slug = request.GET.get("slug", "live")
-    rel_path = f"{settings.MEDIA_URL}hls/{slug}/index.m3u8"
-    abs_url = request.build_absolute_uri(rel_path)
-    return JsonResponse({"hls_url": abs_url})
+
+    camera_id = request.GET.get("camera")
+
+    if camera_id:
+        try:
+            cam = Camera.objects.get(id=int(camera_id))
+        except (Camera.DoesNotExist, ValueError):
+            return JsonResponse({"error": "camera not found"}, status=404)
+        rel_path = f"{settings.MEDIA_URL}hls/{cam.id}/index.m3u8"
+        abs_url = request.build_absolute_uri(rel_path)
+        return JsonResponse({"camera_id": cam.id, "hls_url": abs_url})
+
+    # else: all cameras
+    cams = Camera.objects.all()
+    data = {}
+    for cam in cams:
+        rel_path = f"{settings.MEDIA_URL}hls/{cam.id}/index.m3u8"
+        data[str(cam.id)] = request.build_absolute_uri(rel_path)
+    return JsonResponse({"hls_urls": data})
 
 
 # ---------------------------------------------------------------------------
@@ -116,3 +136,52 @@ def latest_frame(request):
     return JsonResponse(
         {"id": frame.id, "timestamp": frame.timestamp.isoformat(), "image_url": img_url}
     )
+
+
+# ---------------------------------------------------------------------------
+# Sync frames across cameras at given timestamp
+# ---------------------------------------------------------------------------
+
+
+@require_GET
+def sync_frames(request):
+    """Return nearest frame for each camera at a given timestamp.
+
+    Query params:
+        ts ISO-8601 timestamp (required)
+        tol float seconds tolerance (default 1.0)
+    """
+
+    ts_str = request.GET.get("ts")
+    if not ts_str:
+        return JsonResponse({"error": "missing ts"}, status=400)
+    try:
+        target_ts = datetime.fromisoformat(ts_str)
+    except ValueError:
+        return JsonResponse({"error": "invalid ts"}, status=400)
+
+    tol = float(request.GET.get("tol", 1.0))
+
+    cams = Camera.objects.all()
+    data = {}
+    for cam in cams:
+        frames_qs = Frame.objects.filter(
+            camera=cam,
+            timestamp__gte=target_ts - timedelta(seconds=tol),
+            timestamp__lte=target_ts + timedelta(seconds=tol),
+        )
+        if not frames_qs.exists():
+            continue
+        # choose the frame whose timestamp is closest to target_ts
+        frame = min(frames_qs, key=lambda f: abs((f.timestamp - target_ts).total_seconds()))
+        if frame:
+            try:
+                img_url = request.build_absolute_uri(frame.image.url)
+            except Exception:
+                img_url = None
+            data[str(cam.id)] = {
+                "id": frame.id,
+                "timestamp": frame.timestamp.isoformat(),
+                "image_url": img_url,
+            }
+    return JsonResponse({"timestamp": target_ts.isoformat(), "frames": data})
