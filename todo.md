@@ -54,3 +54,17 @@
 - [x] Update alert evaluation engine to prioritise reference-image similarity over description embedding
 - [x] Extend Alerts API payloads with frame IDs & deep-link to frame player; make dashboard rows clickable
 - [x] Fixed async signal bug in `_notify_clients` and file-pointer bug in reference image save logic
+
+
+## July 1st – Sprint 7 (Multi-camera)
+
+- [x] Add `Camera` model and non-nullable FK on `Frame`
+- [x] Zero-config `ingest` command – spawn thread per camera
+- [x] Zero-config `restream_hls` – FFmpeg per camera, HLS under `hls/<camera_id>`
+- [x] CRUD UI for cameras using Django forms (`/cameras/`)
+- [x] Live view grid – one HLS player per camera with corner badge
+- [x] `/frames/sync/` API and timestamp-aligned frame retrieval
+- [x] Frame-player grid with bounding boxes, skip-empty logic, fixed cam order
+- [x] Search timeline grouped by camera rows; results carry `camera_id`
+- [x] Alerts payload & UI show originating camera
+- [x] Navbar link to Cameras page
