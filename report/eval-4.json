@@ -1,11 +1,11 @@
 {
   "metrics": {
-    "recall@1": 0.904,
-    "recall@5": 0.944,
-    "recall@10": 0.946,
-    "mean_rank": 6.468,
+    "recall@1": 0.876,
+    "recall@5": 0.93,
+    "recall@10": 0.94,
+    "mean_rank": 7.144,
     "median_rank": 1.0,
-    "mrr": 0.9225555555555556
+    "mrr": 0.9008023809523809
   },
   "dataset_info": {
     "sample_size": 500,

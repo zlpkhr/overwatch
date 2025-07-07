@@ -26,13 +26,19 @@ Requirements:
 """
 
 import base64
+import concurrent.futures
+import csv
 import io
 import json
 import logging
 import os
 import random
+import socket
 import sqlite3
 import sys
+import threading
+import time
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Dict, List, Tuple
 
@@ -46,8 +52,6 @@ import torch
 from dotenv import load_dotenv
 from PIL import Image
 from tqdm import tqdm
-import concurrent.futures
-from concurrent.futures import ThreadPoolExecutor
 
 load_dotenv()
 
@@ -74,11 +78,35 @@ ocr_reader = None
 
 FRAME_ID_TO_PATH: Dict[str, str] = {}  # global mapping for Jina reranker
 
-# SQLite FTS path
-FTS_DB_PATH = os.path.join("./evaluation_chroma_data", "text_index.db")
+# Persistence directory (shared among Chroma & auxiliary files)
+PERSIST_PATH = os.path.join(".", "evaluation_chroma_data")
+
+FTS_DB_PATH = os.path.join(PERSIST_PATH, "text_index.db")
+CSV_LOG_PATH = os.path.join(PERSIST_PATH, "query_log.csv")
+
+write_lock = threading.Lock()
 
 # SQLite FTS connection (persistent)
 FTS_CONN: sqlite3.Connection | None = None
+
+RERANK_TOP = 10  # max docs sent to Jina reranker to avoid timeouts
+
+# --------------------------------------------------
+# Network availability helper
+# --------------------------------------------------
+
+
+def wait_for_network(hosts=("8.8.8.8", "example.com"), timeout=3, sleep_sec=10):
+    """Block until any host in *hosts* is reachable on port 443."""
+    while True:
+        for h in hosts:
+            try:
+                with socket.create_connection((h, 443), timeout=timeout):
+                    return
+            except Exception:
+                continue
+        logger.warning("Network unavailable – retrying in %s sec", sleep_sec)
+        time.sleep(sleep_sec)
 
 
 def _init_fts():
@@ -493,18 +521,28 @@ def search_production_pipeline(
     sorted_dists = sorted(best.items(), key=lambda x: x[1])
     top_candidates = sorted_dists[:n_results]
 
-    # 5) Prepare images for reranker
+    # 5) Prepare images for reranker (limit to RERANK_TOP)
     images_for_rerank = []
     id_order = []
-    for fid, _ in top_candidates:
+    for fid, _ in top_candidates[:RERANK_TOP]:
         path = FRAME_ID_TO_PATH.get(fid)
         if path:
             b64 = encode_image_to_base64(path)
             images_for_rerank.append({"image": b64})
             id_order.append(fid)
 
-    # 6) Call Jina reranker (fall back if fails)
-    reranked_idx, _scores = call_jina_reranker(query, images_for_rerank, n_results)
+    # 6) Call Jina reranker with simple retry
+    for attempt in range(3):
+        try:
+            reranked_idx, _scores = call_jina_reranker(
+                query, images_for_rerank, len(id_order)
+            )
+            break
+        except Exception as e:
+            logger.warning("Jina rerank attempt %s failed: %s", attempt + 1, e)
+            time.sleep(2**attempt)
+    else:
+        reranked_idx = list(range(len(id_order)))  # fallback
 
     # 7) Build final ordered list following reranked indices
     final_list: List[Tuple[str, float]] = []
@@ -531,38 +569,74 @@ def search_production_pipeline(
     return final_list
 
 
-def evaluate_metrics(reverse_ground_truth: Dict[str, List[str]], max_workers: int = 5) -> Tuple[float, float]:
-    """Compute Recall@10 and MRR using limited parallelism."""
+def evaluate_metrics(reverse_ground_truth: Dict[str, List[str]], max_workers: int = 5):
+    """Compute Recall@{1,5,10}, mean/median rank, MRR with limited parallelism."""
     captions = list(reverse_ground_truth.keys())
     total_queries = len(captions)
-    recall_sum = 0.0
+
+    recalls = {1: 0, 5: 0, 10: 0}
+    ranks: List[int] = []
     mrr_sum = 0.0
 
     def _process(caption: str):
         relevant = set(reverse_ground_truth[caption])
+        expansions = expand_query_llm(caption, 3)
         res = search_production_pipeline(caption, n_results=100)
         retrieved_ids = [fid for fid, _ in res]
-        # Recall@10
-        hit = len(relevant.intersection(set(retrieved_ids[:10])))
-        # MRR
-        rr = 0.0
-        for rank, fid in enumerate(retrieved_ids, 1):
+        rank = None
+        for idx, fid in enumerate(retrieved_ids, 1):
             if fid in relevant:
-                rr = 1.0 / rank
+                rank = idx
                 break
-        return hit, len(relevant), rr
+        # log row
+        _log_query(
+            {
+                "caption": caption,
+                "expansions": "|".join(expansions),
+                "rank": rank if rank is not None else -1,
+                "top10": "|".join(retrieved_ids[:10]),
+            }
+        )
+        return rank, len(relevant)
 
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         futures = {executor.submit(_process, cap): cap for cap in captions}
-        for fut in tqdm(concurrent.futures.as_completed(futures), total=total_queries, desc="Eval R@10 & MRR"):
-            hit, denom, rr = fut.result()
-            if denom:
-                recall_sum += hit / denom
-            mrr_sum += rr
+        for fut in tqdm(
+            concurrent.futures.as_completed(futures),
+            total=total_queries,
+            desc="Eval metrics",
+        ):
+            rank, denom = fut.result()
+            # update metrics
+            if rank is not None:
+                if rank <= 1:
+                    recalls[1] += 1
+                if rank <= 5:
+                    recalls[5] += 1
+                if rank <= 10:
+                    recalls[10] += 1
+                ranks.append(rank)
+                mrr_sum += 1.0 / rank
+            else:
+                ranks.append(101)  # not retrieved within 100
 
-    recall_10 = recall_sum / total_queries if total_queries else 0.0
+    # normalize
+    recall_at_1 = recalls[1] / total_queries
+    recall_at_5 = recalls[5] / total_queries
+    recall_at_10 = recalls[10] / total_queries
+
+    mean_rank = float(np.mean(ranks)) if ranks else 0.0
+    median_rank = float(np.median(ranks)) if ranks else 0.0
     mrr = mrr_sum / total_queries if total_queries else 0.0
-    return recall_10, mrr
+
+    return {
+        "recall@1": recall_at_1,
+        "recall@5": recall_at_5,
+        "recall@10": recall_at_10,
+        "mean_rank": mean_rank,
+        "median_rank": median_rank,
+        "mrr": mrr,
+    }
 
 
 def run_production_evaluation():
@@ -581,7 +655,7 @@ def run_production_evaluation():
     captions_file = "data/flickr_annotations_30k.csv"
 
     # Fixed sample size
-    max_images = 10
+    max_images = 500
 
     logger.info(f"Images directory: {images_dir}")
     logger.info(f"Captions file: {captions_file}")
@@ -604,7 +678,7 @@ def run_production_evaluation():
     logger.info("\n=== Running Production Pipeline Evaluation ===")
 
     # Evaluate both metrics in one pass
-    recall_10, mrr = evaluate_metrics(reverse_ground_truth)
+    metrics = evaluate_metrics(reverse_ground_truth)
 
     # Print results
     logger.info("\n=== Evaluation Results ===")
@@ -612,13 +686,12 @@ def run_production_evaluation():
     logger.info(f"Total captions evaluated: {len(reverse_ground_truth)}")
     logger.info(f"Images with captions: {len(ground_truth)}")
     logger.info("")
-    logger.info(f"Recall@10: {recall_10:.4f}")
-    logger.info(f"MRR: {mrr:.4f}")
+    for k, v in metrics.items():
+        logger.info(f"{k}: {v}")
 
     # Save results
     results = {
-        "recall_at_10": recall_10,
-        "mrr": mrr,
+        "metrics": metrics,
         "dataset_info": {
             "sample_size": max_images,
             "total_captions": len(reverse_ground_truth),
@@ -662,6 +735,7 @@ Return the expanded queries as json object with a single key \"queries\" and a l
 def expand_query_llm(query: str, n_expansions: int = 3) -> List[str]:
     """Replicates search.views.expand_query_llm; falls back gracefully."""
     try:
+        wait_for_network()
         # Uses environment variable OPENAI_API_KEY
         client = openai.OpenAI()
         response = client.responses.create(
@@ -719,6 +793,7 @@ def call_jina_reranker(
     if not images_for_rerank:
         return reranked_indices, rerank_scores
     try:
+        wait_for_network()
         jina_key = os.getenv("JINA_API_KEY")
         if not jina_key:
             raise RuntimeError("JINA_API_KEY env var not set")
@@ -735,7 +810,7 @@ def call_jina_reranker(
             "return_documents": False,
         }
         resp = requests.post(
-            "https://api.jina.ai/v1/rerank", headers=headers, json=payload, timeout=30
+            "https://api.jina.ai/v1/rerank", headers=headers, json=payload, timeout=60
         )
         if resp.status_code == 200:
             data = resp.json()
@@ -745,6 +820,16 @@ def call_jina_reranker(
     except Exception as e:
         logger.error(f"call_jina_reranker error: {e} (fallback to original order)")
     return reranked_indices, rerank_scores
+
+
+def _log_query(row: dict):
+    with write_lock:
+        file_exists = os.path.exists(CSV_LOG_PATH)
+        with open(CSV_LOG_PATH, "a", newline="") as f:
+            writer = csv.DictWriter(f, fieldnames=row.keys())
+            if not file_exists:
+                writer.writeheader()
+            writer.writerow(row)
 
 
 if __name__ == "__main__":

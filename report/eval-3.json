@@ -1,16 +1,16 @@
 {
   "metrics": {
-    "recall@1": 0.904,
-    "recall@5": 0.944,
-    "recall@10": 0.946,
-    "mean_rank": 6.468,
+    "recall@1": 0.94,
+    "recall@5": 0.94,
+    "recall@10": 0.94,
+    "mean_rank": 7.0,
     "median_rank": 1.0,
-    "mrr": 0.9225555555555556
+    "mrr": 0.94
   },
   "dataset_info": {
-    "sample_size": 500,
-    "total_captions": 500,
-    "images_with_captions": 500
+    "sample_size": 50,
+    "total_captions": 50,
+    "images_with_captions": 50
   },
   "pipeline_info": {
     "model": "ViT-B/32",
