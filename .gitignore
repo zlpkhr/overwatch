@@ -6,3 +6,5 @@ footage.mp4
 /media/
 .env
 yolov8n.pt
+data/
+evaluation_chroma_data

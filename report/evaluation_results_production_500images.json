@@ -1,0 +1,18 @@
+{
+  "recall_at_10": 0.936,
+  "mrr": 0.7950066209753542,
+  "dataset_info": {
+    "sample_size": 500,
+    "total_captions": 500,
+    "images_with_captions": 500
+  },
+  "pipeline_info": {
+    "model": "ViT-B/32",
+    "device": "cpu",
+    "yolo_available": true,
+    "embedding_functions": "production CCTV pipeline",
+    "search_method": "ChromaService with cosine distance",
+    "includes_object_detection": true,
+    "includes_ocr": true
+  }
+}
